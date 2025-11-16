@@ -28,9 +28,8 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 
-
 from functions import KalmanFilter, ExtendedKalmanFilter, UnscentedKalmanFilter, ParticleFilter
-from functions import LEDH
+from functions import EDH, LEDH
 from functions import LGSSM
 from functions import SVSSM
 
@@ -103,20 +102,31 @@ for i in range(nD):
     plt.plot(X_PF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
 
+X_EDH = EDH(Y, N=10, stepsize=0.1)
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_EDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+    
+X_EDH2 = EDH(Y, N=10, stepsize=0.1, method="EKF")
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_EDH2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+ 
 X_LEDH = LEDH(Y, N=10, stepsize=0.1)
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
- 
 
-X_LEDH = LEDH(Y, N=10, stepsize=0.1, method="UKF")
+X_LEDH2 = LEDH(Y, N=10, stepsize=0.1, method="EKF")
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.plot(X_LEDH2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
-    
-    
+ 
+
     
     
     
@@ -125,7 +135,7 @@ for i in range(nD):
     
     
 
-A       = tf.eye(nD, dtype=tf.float64) * 0.75
+A       = tf.eye(nD, dtype=tf.float64) * 0.99
 X, Y    = SVSSM(nT,nD, A=A)
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
@@ -150,10 +160,37 @@ for i in range(nD):
     plt.plot(X_PF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
 
-X_LEDH = LEDH(Y, A=A, N=10, stepsize=0.1)
+X_EDH = EDH(Y, N=10, A=A, stepsize=0.1)
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_EDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+    
+X_EDH2 = EDH(Y, N=10, A=A, stepsize=0.1, method="EKF")
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_EDH2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+ 
+X_LEDH = LEDH(Y, N=10, A=A, stepsize=0.1)
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
+
+X_LEDH2 = LEDH(Y, N=10, A=A, stepsize=0.1, method="EKF")
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_LEDH2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
  
+
+    
+    
+    
+    
+    
+     
+ 
+
     

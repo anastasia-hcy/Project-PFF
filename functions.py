@@ -170,10 +170,10 @@ def ExtendedKalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=Non
     nTimes, ndims   = y.shape 
     
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
-    if A is not None and tf.reduce_max(A) > 1.0:
-        raise ValueError("The matrix A out of range [-1,1].")
-    if A is not None and tf.reduce_min(A) < -1.0:
-        raise ValueError("The matrix A out of range [-1,1].")
+    if A is not None and tf.reduce_max(A) >= 1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
+    if A is not None and tf.reduce_min(A) <= -1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
     
     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
@@ -264,10 +264,11 @@ def UnscentedKalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=No
     nTimes, ndims   = y.shape 
     
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
-    if A is not None and tf.reduce_max(A) > 1.0:
-        raise ValueError("The matrix A out of range [-1,1].")
-    if A is not None and tf.reduce_min(A) < -1.0:
-        raise ValueError("The matrix A out of range [-1,1].")
+    if A is not None and tf.reduce_max(A) >= 1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
+    if A is not None and tf.reduce_min(A) <= -1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
+    
     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
@@ -334,6 +335,20 @@ def initiate_particles(N, n, mu0, Sigma0):
     return x0, w0 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def draw_particles(N, n, xprev, y, SigmaX, muy, SigmaY, U):
     xn              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
     Lp              = tf.Variable(tf.zeros((N,), dtype=tf.float64)) 
@@ -392,10 +407,10 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
     nTimes, ndims   = y.shape 
 
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
-    if A is not None and tf.reduce_max(A) > 1.0:
-        raise ValueError("The matrix A out of range [-1,1].")
-    if A is not None and tf.reduce_min(A) < -1.0:
-        raise ValueError("The matrix A out of range [-1,1].")
+    if A is not None and tf.reduce_max(A) >= 1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
+    if A is not None and tf.reduce_min(A) <= -1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
     
     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
@@ -432,6 +447,187 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
         X_filtered[i,:].assign(x_filt) 
 
     return X_filtered
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def Li17eq10(L, H, P, R, U):
+    C               = tf.linalg.inv( L * H @ P @ tf.transpose(H) + R + U )
+    return -1/2 * P @ tf.transpose(H) @ C @ H 
+
+def Li17eq11(I, L, A, H, P, R, y, ei, e0i, U):
+    M1          = (I + 2*L * A) 
+    M2          = (I + L * A) @ P @ tf.transpose(H) @ tf.linalg.inv(R + U)
+    v           = tf.linalg.matvec(M2, (y - ei)) + tf.linalg.matvec(A, e0i)
+    return tf.linalg.matvec(M1, v)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def EDH_linearize_EKF(N, n, xprev, xhat, Pprev, A, B, V, W, muy, U): 
+    
+    m_pred, P_pred  = EKF_Predict(xhat, Pprev, A, V) 
+    
+    eta             = tf.Variable(m_pred)
+    eta0            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
+    for i in range(N):
+        eta0[i,:].assign( norm_rvs(n, xprev[i,:], P_pred + U) )
+    
+    y_pred          = SV_transform(n, muy, B, m_pred, W, U) 
+    Jx, Jw          = EKF_Jacobi(m_pred, y_pred, B)
+    Cy              = Jw @ tf.transpose(Jw)
+    err             = y_pred - tf.linalg.matvec(Jx, m_pred) 
+    
+    return eta, eta0, m_pred, P_pred, y_pred, Jx, Jw, Cy, err 
+
+
+def EDH_linearize_UKF(N, n, xprev, xhat, Pprev, A, B, V, W, wm, wc, wi, L, U):
+        
+    Xprev_sp        = SigmaPoints(n, xhat, Pprev, L)
+    X_sp            = Xprev_sp @ tf.transpose(A) 
+    
+    m_pred          = UKF_Predict_mean(wm, wi, X_sp) 
+    P_pred          = UKF_Predict_cov(n, wc, wi, X_sp, m_pred, U, Cov=V)  
+    
+    x_pred0         = tf.Variable(tf.zeros((n*2,), dtype=tf.float64))
+    x_pred0[:n].assign(m_pred)
+    P_pred0         = tf.Variable(tf.zeros((n*2,n*2), dtype=tf.float64))
+    P_pred0[n:n*2,n:n*2].assign(W)     
+    P_pred0[0:n,0:n].assign(P_pred)
+    
+    Xpred_sp        = SigmaPoints(n*2, x_pred0, P_pred0, L)
+    Y_sp            = tf.math.exp(Xpred_sp[:,:n]/2) @ tf.transpose(B) * Xpred_sp[:,n:]
+    
+    y_pred          = UKF_Predict_mean(wm, wi, Y_sp)
+    W_pred          = UKF_Predict_cov(n, wc, wi, Y_sp, y_pred, U)
+    Jx, _           = EKF_Jacobi(m_pred, y_pred, B)
+    err             = y_pred - tf.linalg.matvec(Jx, m_pred) 
+    
+    eta             = tf.Variable(m_pred) 
+    eta0            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
+    for i in range(N): 
+        eta0[i,:].assign( norm_rvs(n, xprev[i,:], P_pred + U) )   
+        
+    return eta, eta0, m_pred, P_pred, y_pred, Jx, W_pred, err, Xpred_sp, Y_sp
+
+
+
+def EDH_flow_dynamics(N, n, Lamb, epsilon, I, e, e0, P, H, R, er, y, U):
+    Ai              = Li17eq10(Lamb, H, P, R, U)
+    bi              = Li17eq11(I, Lamb, Ai, H, P, R, y, er, e, U)
+    move0           = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
+    for i in range(N): 
+        move0[i,:].assign( epsilon * (tf.linalg.matvec(Ai, e0[i,:]) + bi) )  
+    move            = epsilon * (tf.linalg.matvec(Ai, e) + bi) 
+    return move0, move
+
+def EDH_flow_lp(N, eta0, eta1, xprev, y, SigmaX, muy, SigmaY, U):
+    Lp              = tf.Variable(tf.zeros((N,), dtype=tf.float64)) 
+    for i in range(N):  
+        Lp[i].assign( LogLikelihood(eta1[i,:], y, muy, SigmaY, U) + LogTarget(eta1[i,:], xprev[i,:], SigmaX) - LogImportance(eta0[i,:], xprev[i,:], SigmaX) )  
+    return Lp
+
+def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
+
+    nTimes, ndims   = y.shape 
+
+    A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
+    if A is not None and tf.reduce_max(A) >= 1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
+    if A is not None and tf.reduce_min(A) <= -1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
+    
+    B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
+    V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
+    W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
+
+    mu0             = tf.zeros((ndims,), dtype=tf.float64) if mu0 is None else mu0
+    Sigma0          = (V @ V) @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A) if Sigma0 is None else Sigma0
+    muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
+
+    N               = 1000 if N is None else N
+    Np              = N
+
+    method          = "UKF" if method is None else method 
+    weight0_m, weight0_c, weighti, L = SigmaWeights(ndims)
+    
+    stepsize        = 1e-3 if stepsize is None else stepsize 
+    if stepsize is not None and stepsize >= 1.0:
+        raise ValueError("Step-size out of range [0,1).")
+    if stepsize is not None and stepsize  < 0.0:
+        raise ValueError("Step-size out of range [0,1).")
+    
+    Rates           = tf.range(0.0, 1.0, stepsize, dtype=tf.float64)
+    Nl              = len(Rates)
+
+    u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
+    I               = tf.eye(ndims, dtype=tf.float64)
+
+    X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
+    
+    x_filt          = tf.Variable(mu0, dtype=tf.float64)
+    P_prev          = A @ Sigma0 @ tf.transpose(A) + V 
+    x_prev, w_prev  = initiate_particles(Np, ndims, x_filt, P_prev)
+
+    for i in range(nTimes): 
+
+        if method == "UKF":        
+            eta, eta0, m_pred, P_pred, y_pred, H, R, el, xsp, ysp       = EDH_linearize_UKF(Np, ndims, x_prev, x_filt, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, u)
+        if method == "EKF":            
+            eta, eta0, m_pred, P_pred, y_pred, H, Hw, R, el             = EDH_linearize_EKF(Np, ndims, x_prev, x_filt, P_prev, A, B, V, W, muy, u)
+            
+        eta1        = eta0
+        for j in range(Nl): 
+            try:
+                eta1_move, eta_move         = EDH_flow_dynamics(Np, ndims, Rates[j], stepsize, I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
+            except: 
+                return x_prev, eta0, m_pred, P_pred, y_pred, H, R, el 
+            eta.assign_add(eta_move)
+            eta1.assign_add(eta1_move)
+            
+        lp          = EDH_flow_lp(Np, eta0, eta1, x_prev, y[i,:], P_pred, muy, W, u)     
+        w_pred      = compute_weights(w_prev, lp)
+        w_norm      = normalize_weights(w_pred)        
+        x_filt      = compute_posterior(w_norm, eta1)
+        
+        x_prev      = eta1
+        X_filtered[i,:].assign(x_filt) 
+        
+        if method == "UKF":
+            C_pred          = UKF_Predict_crosscov(ndims, weight0_c, weighti, xsp[:,:ndims], m_pred, ysp, y_pred, u) 
+            K               = UKF_Gain(C_pred, R, u)
+            _, P_filt       = UKF_Filter(m_pred, P_pred, R, y[i,:], y_pred, K)
+        if method == "EKF":    
+            K               = EKF_Gain(P_pred, H, Hw, W, u)
+            _, P_filt       = EKF_Filter(m_pred, P_pred, y[i,:], y_pred, H, K)
+        P_prev      = P_filt
+        
+    return X_filtered
+
+
+
+
+
 
 
 
@@ -555,8 +751,6 @@ def LEDH_update_UKF(N, n, m0, P0, y, yhat, Hw, Xsp, Ysp, wc, wi, U):
         P[i,:,:].assign(Pi)
     return P
 
-
-
 def LEDH_flow_dynamics(N, n, Lamb, epsilon, I, eta, eta0, Pi, Hi, Ri, err, y, U):
     
     move0           = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
@@ -565,13 +759,8 @@ def LEDH_flow_dynamics(N, n, Lamb, epsilon, I, eta, eta0, Pi, Hi, Ri, err, y, U)
     
     for i in range(N):         
         
-        C           = tf.linalg.inv( Lamb * Hi[i,:,:] @ Pi[i,:,:] @ tf.transpose(Hi[i,:,:])  + Ri[i,:,:] + U )
-        Ai          = -1/2 * Pi[i,:,:] @ tf.transpose(Hi[i,:,:]) @ C @ Hi[i,:,:]
-        
-        M1          = (I + 2*Lamb * Ai) 
-        M2          = (I + Lamb * Ai) @ Pi[i,:,:] @ tf.transpose(Hi[i,:,:]) @ tf.linalg.inv(Ri[i,:,:] + U)
-        v           = tf.linalg.matvec(M2, (y - err[i,:])) + tf.linalg.matvec(Ai, eta0[i,:])
-        bi          = tf.linalg.matvec(M1, v)
+        Ai          = Li17eq10(Lamb, Hi[i,:,:], Pi[i,:,:], Ri[i,:,:], U)
+        bi          = Li17eq11(I, Lamb, Ai, Hi[i,:,:], Pi[i,:,:], Ri[i,:,:], y, err[i,:], eta0[i,:], U)
         
         move0[i,:].assign( epsilon * (tf.linalg.matvec(Ai, eta0[i,:]) + bi) )
         move[i,:].assign( epsilon * (tf.linalg.matvec(Ai, eta[i,:]) + bi) )
@@ -590,10 +779,10 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sig
     nTimes, ndims   = y.shape 
 
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
-    if A is not None and tf.reduce_max(A) > 1.0:
-        raise ValueError("The matrix A out of range [-1,1].")
-    if A is not None and tf.reduce_min(A) < -1.0:
-        raise ValueError("The matrix A out of range [-1,1].")
+    if A is not None and tf.reduce_max(A) >= 1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
+    if A is not None and tf.reduce_min(A) <= -1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
     
     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
@@ -609,9 +798,8 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sig
     resample        = False if resample is None else resample
     NT              = Np / 2
 
-    method          = "EKF" if method is None else method 
+    method          = "UKF" if method is None else method 
     weight0_m, weight0_c, weighti, L = SigmaWeights(ndims)
-    
     
     stepsize        = 1e-3 if stepsize is None else stepsize 
     if stepsize is not None and stepsize >= 1.0:
@@ -633,42 +821,23 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sig
 
     for i in range(nTimes): 
 
-        if method == "EKF":            
-            try:
-                eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el = LEDH_linearize_EKF(Np, ndims, x_prev, P_prev, A, B, V, W, muy, u)
-            except:
-                return x_prev, P_prev    
         if method == "UKF":        
-            # try: 
-            eta, eta0, m_pred, P_pred, y_pred, H, R, el, xsp, ysp = LEDH_linearize_UKF(Np, ndims, x_prev, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, u)
-            # except: 
-                # return x_prev, P_prev 
-            
+            eta, eta0, m_pred, P_pred, y_pred, H, R, el, xsp, ysp       = LEDH_linearize_UKF(Np, ndims, x_prev, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, u)
+        if method == "EKF":            
+            eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el            = LEDH_linearize_EKF(Np, ndims, x_prev, P_prev, A, B, V, W, muy, u)
+              
         eta1        = eta0
         theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
         for j in range(Nl): 
             try:
                 eta1_move, eta_move, theta_prod     = LEDH_flow_dynamics(Np, ndims, Rates[j], stepsize, I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
             except: 
-                return x_prev, eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el 
-            
+                return x_prev, eta, eta0, m_pred, P_pred, y_pred, H, R, el 
             eta.assign_add(eta_move)
             eta1.assign_add(eta1_move)
             theta.assign(theta * theta_prod)
             
-        # x_pred      = eta1
-        try:
-            lp          = LEDH_flow_lp(Np, eta0, theta, eta1, x_prev, y[i,:], P_pred, muy, W, u)
-        except:
-            return x_prev, eta, eta0, eta1, theta, m_pred, P_pred, y_pred, H, Hiw, R, el 
-        
-        if method == "EKF":    
-            P_filt      = LEDH_update_EKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, H, Hiw, W, u)
-        if method == "UKF":
-            P_filt      = LEDH_update_UKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, R, xsp, ysp, weight0_c, weighti, u) 
-        
-        P_prev      = P_filt
-        
+        lp          = LEDH_flow_lp(Np, eta0, theta, eta1, x_prev, y[i,:], P_pred, muy, W, u)       
         w_pred      = compute_weights(w_prev, lp)
         w_norm      = normalize_weights(w_pred)        
         x_filt      = compute_posterior(w_norm, eta1)
@@ -676,5 +845,10 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sig
         x_prev      = eta1
         X_filtered[i,:].assign(x_filt) 
         
+        if method == "UKF":
+            P_filt  = LEDH_update_UKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, R, xsp, ysp, weight0_c, weighti, u) 
+        if method == "EKF":    
+            P_filt  = LEDH_update_EKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, H, Hiw, W, u)
+        P_prev      = P_filt
         
     return X_filtered
