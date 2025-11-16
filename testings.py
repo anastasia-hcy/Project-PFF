@@ -54,6 +54,16 @@ nD              = 5
 
 
 
+M4 = tf.random.normal((nT,nD), 0, 1, dtype=tf.float64)
+v4 = tf.random.normal((nT,), 0, 1, dtype=tf.float64)
+M5 = tf.Variable(tf.zeros((nT,nD), dtype=tf.float64))
+for i in range(nT):
+    M5[i,:].assign(v4[i] * M4[i,:])
+
+np.all(
+    np.round(tf.linalg.matvec( tf.transpose(M4), v4), decimals=9) == np.round(tf.reduce_sum(M5, axis=0), decimals=9)
+)
+
 
 from functions import SE_kernel, SE_Cov
 
@@ -89,9 +99,6 @@ np.all(
 np.all( 
     tf.linalg.diag_part(M) * (v3**2) == tf.linalg.diag_part( v3 * M * v3) 
 )
-
-
-
 
 
 
