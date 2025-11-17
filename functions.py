@@ -7,7 +7,15 @@ tfd = tfp.distributions
 
 
 
-def SE_kernel(x1, x2, scale, length):
+
+
+
+def SE_kernel_div(x1, x2, length):
+    return - (x1-x2) / length
+
+def SE_kernel(x1, x2, scale=None, length=None):
+    scale           = 1.0 if scale is None else scale 
+    length          = 1.0 if length is None else length 
     return (scale**2) * tf.math.exp( - (x1-x2)**2 / (2*length) )
 
 def SE_Cov(ndims, x, scale=None, length=None):
@@ -16,10 +24,18 @@ def SE_Cov(ndims, x, scale=None, length=None):
     M               = tf.Variable( tf.zeros((ndims,ndims), dtype=tf.float64) )
     for i in range(ndims): 
         for j in range(i,ndims): 
-            v       = SE_kernel(x[i], x[j], scale, length) 
-            M[i,j].assign(v)       
-            M[j,i].assign(v)       
-    return M 
+            v       = SE_kernel(x[i], x[j], scale=scale, length=length)
+            M[i,j].assign(v)                     
+            M[j,i].assign(v)                     
+    return M
+
+
+
+
+
+
+
+
 
 def norm_rvs(n, mean, Sigma):
     chol            = tf.linalg.cholesky(Sigma)
@@ -59,12 +75,12 @@ def LGSSM(nTimes, ndims, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
         
     return X, Y
 
-
 def SV_transform(n, m, B, x, W, U=None):
     U               = tf.zeros((n,n), dtype=tf.float64) if U is None else U
     z               = tf.linalg.matvec(B, tf.math.exp(x/2)) 
-    C               = tf.linalg.tensordot(tf.linalg.matvec(W, z), z, axes=0)   
+    C               = tf.linalg.diag(z) @ W @ tf.linalg.diag(z) 
     return norm_rvs(n, m, C + U)
+
 
 def SVSSM(nTimes, ndims, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None, muy=None):
     
@@ -103,6 +119,19 @@ def SVSSM(nTimes, ndims, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None, 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 def KF_Predict(x_prev, P_prev, A, V):
     x               = tf.linalg.matvec(A, x_prev)
     P               = A @ P_prev @ tf.transpose(A) + V
@@ -111,7 +140,7 @@ def KF_Predict(x_prev, P_prev, A, V):
 def KF_Gain(P, B, W):
     M               = P @ tf.transpose(B) 
     Minv            = tf.linalg.inv(B @ M + W) 
-    return M * Minv
+    return M @ Minv
 
 def KF_Filter(x_prev, P_prev, y_obs, B, K):
     x               = x_prev + tf.linalg.matvec(K, y_obs - tf.linalg.matvec(B, x_prev))
@@ -141,6 +170,13 @@ def KalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
         X_filtered[i,:].assign(x_prev)
         
     return X_filtered
+
+
+
+
+
+
+
 
 
 
@@ -328,11 +364,10 @@ def UnscentedKalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=No
 
 
 def initiate_particles(N, n, mu0, Sigma0):
-    w0              = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
     x0              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
     for i in range(N):  
         x0[i,:].assign( norm_rvs(n, mu0, Sigma0) )
-    return x0, w0 
+    return x0 
 
 
 
@@ -349,13 +384,13 @@ def initiate_particles(N, n, mu0, Sigma0):
 
 
 
-def draw_particles(N, n, xprev, y, SigmaX, muy, SigmaY, U):
+def draw_particles(N, n, y, xprev, SigmaX, muy, SigmaY, Sigma0, U):
     xn              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
     Lp              = tf.Variable(tf.zeros((N,), dtype=tf.float64)) 
     for i in range(N):  
-        xi          = norm_rvs(n, xprev[i,:], SigmaX)
+        xi          = norm_rvs(n, xprev[i,:], Sigma0)
         xn[i,:].assign(xi)
-        Lp[i].assign( LogLikelihood(xi, y, muy, SigmaY, U) + LogTarget(xi, xprev[i,:], SigmaX) - LogImportance(xi, xprev[i,:], SigmaX) )      
+        Lp[i].assign( LogLikelihood(xi, y, muy, SigmaY, U) + LogTarget(xi, xprev[i,:], SigmaX) - LogImportance(xi, xprev[i,:], Sigma0) )      
     return xn, Lp 
 
 def LogImportance(x, mu0, Sigma0):
@@ -366,7 +401,7 @@ def LogImportance(x, mu0, Sigma0):
 def LogLikelihood(x, y, muy, Sigma, U):
     
     xe              = tf.math.exp(x/2)
-    Ci              = tf.linalg.tensordot(tf.linalg.matvec(Sigma, xe), xe, axes=0) + U
+    Ci              = tf.linalg.diag(xe) @ Sigma @ tf.linalg.diag(xe) + U 
     
     InvCi           = tf.linalg.inv(Ci)
     detCi           = tf.linalg.det(Ci)
@@ -389,8 +424,8 @@ def compute_ESS(w):
 def multinomial_resample(N, x, w):
     dist            = tfd.Categorical(probs=w)
     indices         = dist.sample(N)
-    xbar            = tf.Variable(tf.gather(x, indices))
-    wbar            = tf.Variable(tf.ones((N,), dtype=tf.float64)/N) 
+    xbar            = tf.gather(x, indices)
+    wbar            = tf.ones((N,), dtype=tf.float64) / N 
     return xbar, wbar 
 
 
@@ -426,12 +461,15 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
 
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
-    x_prev, w_prev  = initiate_particles(N, ndims, mu0, Sigma0)
+    ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
+
+    x_prev          = initiate_particles(N, ndims, mu0, Sigma0)
+    w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
 
     for i in range(nTimes):
         
-        x_pred, lp  = draw_particles(N, ndims, x_prev, y[i,:], V, muy, W, u)
-            
+        x_pred, lp  = draw_particles(N, ndims, y[i,:], x_prev, V, muy, W, Sigma0, u)
+
         w_pred      = compute_weights(w_prev, lp)
         w_norm      = normalize_weights(w_pred)
         
@@ -444,9 +482,10 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
             x_filt      = compute_posterior(w_norm, x_pred)
             x_prev      = x_pred
 
+        ESS[i].assign(ness)
         X_filtered[i,:].assign(x_filt) 
 
-    return X_filtered
+    return X_filtered, ESS
 
 
 
@@ -584,10 +623,12 @@ def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=No
     I               = tf.eye(ndims, dtype=tf.float64)
 
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
+    ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
     
     x_filt          = tf.Variable(mu0, dtype=tf.float64)
     P_prev          = A @ Sigma0 @ tf.transpose(A) + V 
-    x_prev, w_prev  = initiate_particles(Np, ndims, x_filt, P_prev)
+    x_prev          = initiate_particles(Np, ndims, x_filt, P_prev)
+    w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
 
     for i in range(nTimes): 
 
@@ -598,19 +639,22 @@ def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=No
             
         eta1        = eta0
         for j in range(Nl): 
-            try:
-                eta1_move, eta_move         = EDH_flow_dynamics(Np, ndims, Rates[j], stepsize, I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
-            except: 
-                return x_prev, eta0, m_pred, P_pred, y_pred, H, R, el 
+            # try:
+            eta1_move, eta_move                                         = EDH_flow_dynamics(Np, ndims, Rates[j], stepsize, I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
+            # except: 
+                # return x_prev, eta0, m_pred, P_pred, y_pred, H, R, el 
             eta.assign_add(eta_move)
             eta1.assign_add(eta1_move)
             
         lp          = EDH_flow_lp(Np, eta0, eta1, x_prev, y[i,:], P_pred, muy, W, u)     
         w_pred      = compute_weights(w_prev, lp)
         w_norm      = normalize_weights(w_pred)        
+        ness        = compute_ESS(w_norm)
+
         x_filt      = compute_posterior(w_norm, eta1)
-        
         x_prev      = eta1
+
+        ESS[i].assign(ness)
         X_filtered[i,:].assign(x_filt) 
         
         if method == "UKF":
@@ -622,7 +666,7 @@ def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=No
             _, P_filt       = EKF_Filter(m_pred, P_pred, y[i,:], y_pred, H, K)
         P_prev      = P_filt
         
-    return X_filtered
+    return X_filtered, ESS
 
 
 
@@ -675,7 +719,7 @@ def LEDH_linearize_EKF(N, n, xprev, Pprev, A, B, V, W, muy, U):
         H[i,:,:].assign( Jxi )
         Hw[i,:,:].assign( Jwi )
         
-        Cy[i,:,:].assign( Jwi @ tf.transpose(Jwi) )
+        Cy[i,:,:].assign( Jwi @ W @ tf.transpose(Jwi) )
         err[i,:].assign( yi_pred - tf.linalg.matvec(Jxi, eta[i,:]) )
 
     return eta, eta0, m, P, y, H, Hw, Cy, err
@@ -814,10 +858,15 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sig
     I               = tf.eye(ndims, dtype=tf.float64)
 
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
-    x_prev, w_prev  = initiate_particles(Np, ndims, mu0, Sigma0)
+    ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
+
+    P0              = A @ Sigma0 @ tf.transpose(A) + V
     P_prev          = tf.Variable(tf.zeros((Np,ndims,ndims), dtype=tf.float64))
     for i in range(Np):
-        P_prev[i,:,:].assign( A @ Sigma0 @ tf.transpose(A) + V )
+        P_prev[i,:,:].assign(P0)
+
+    x_prev          = initiate_particles(Np, ndims, mu0, P0)
+    w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
 
     for i in range(nTimes): 
 
@@ -829,20 +878,25 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sig
         eta1        = eta0
         theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
         for j in range(Nl): 
-            try:
-                eta1_move, eta_move, theta_prod     = LEDH_flow_dynamics(Np, ndims, Rates[j], stepsize, I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
-            except: 
-                return x_prev, eta, eta0, m_pred, P_pred, y_pred, H, R, el 
+            # try:
+            eta1_move, eta_move, theta_prod     = LEDH_flow_dynamics(Np, ndims, Rates[j], stepsize, I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
+            # except: 
+                # return x_prev, eta, eta0, m_pred, P_pred, y_pred, H, R, el 
+            
             eta.assign_add(eta_move)
             eta1.assign_add(eta1_move)
-            theta.assign(theta * theta_prod)
+            theta2 = theta * theta_prod
+            theta.assign(theta2)
             
         lp          = LEDH_flow_lp(Np, eta0, theta, eta1, x_prev, y[i,:], P_pred, muy, W, u)       
         w_pred      = compute_weights(w_prev, lp)
         w_norm      = normalize_weights(w_pred)        
-        x_filt      = compute_posterior(w_norm, eta1)
-        
+        ness        = compute_ESS(w_norm)
+
+        x_filt      = compute_posterior(w_norm, eta1)        
         x_prev      = eta1
+
+        ESS[i].assign(ness)
         X_filtered[i,:].assign(x_filt) 
         
         if method == "UKF":
@@ -851,4 +905,118 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sig
             P_filt  = LEDH_update_EKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, H, Hiw, W, u)
         P_prev      = P_filt
         
+    return X_filtered, ESS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def Hu21eq13(y, ypred, Jx, Jw, W, U):
+    Rinv = tf.linalg.inv( Jw @ W @ tf.transpose(Jw) + U )
+    yhat = y - ypred
+    return tf.linalg.matvec( tf.transpose(Jx) @ Rinv, yhat)
+
+def Hu21eq15(xpred, x0, Sigma0):
+    return tf.linalg.matvec( tf.linalg.inv(Sigma0), xpred - x0)
+
+def KPFF_LP(N, n, x, y, muy, B, W, mu0, Sigma0, U):
+    LP              = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
+    for i in range(N):
+        yi_pred     = SV_transform(n, muy, B, x[i,:], W, U)
+        Hx, Hw      = EKF_Jacobi(x[i,:], yi_pred, B)
+        lpi         = Hu21eq13(y, yi_pred, Hx, Hw, W, U) - Hu21eq15(x[i,:], mu0, Sigma0)
+        LP[i,:].assign(lpi)
+    return LP
+
+def KPFF_RKHS(N, n, x, Lp, Sigma0):
+    In              = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
+    for i in range(n): 
+        for j in range(N):
+            val = 0.0
+            for k in range(N):
+                K   = SE_kernel(x[j,i], x[k,i], length=Sigma0[i,i])
+                Kd  = SE_kernel_div(x[j,i], x[k,i], length=Sigma0[i,i]) 
+                val += 1/N * ( Lp[j,i] * K + Kd ) 
+            In[j,i].assign(val) 
+    return In
+
+def KPFF_flow(N, n, epsilon, integral, Sigma0):
+    xadd            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
+    for i in range(N):
+        field       = tf.linalg.matvec( Sigma0, integral[i,:] )
+        xadd[i,:].assign( epsilon * field )
+    return xadd 
+
+
+def KernelPFF(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=None, stepsize=None):
+
+    nTimes, ndims   = y.shape 
+
+    A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
+    if A is not None and tf.reduce_max(A) >= 1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
+    if A is not None and tf.reduce_min(A) <= -1.0:
+        raise ValueError("The matrix A out of range (-1,1).")
+    
+    B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
+    V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
+    W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
+
+    mu0             = tf.zeros((ndims,), dtype=tf.float64) if mu0 is None else mu0
+    Sigma0          = (V @ V) @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A) if Sigma0 is None else Sigma0
+    muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
+
+    N               = 1000 if N is None else N
+    Np              = N
+    
+    stepsize        = 1e-3 if stepsize is None else stepsize 
+    if stepsize is not None and stepsize >= 1.0:
+        raise ValueError("Step-size out of range [0,1).")
+    if stepsize is not None and stepsize  < 0.0:
+        raise ValueError("Step-size out of range [0,1).")
+    
+    Nl              = int(1/stepsize)    
+    u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
+
+    X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))  
+      
+    for i in range(nTimes): 
+        
+        x_prev      = initiate_particles(N, ndims, mu0, Sigma0)
+        x_hat       = tf.Variable( tf.reduce_mean(x_prev, axis=0) )
+        
+        for _ in range(Nl): 
+            grad    = KPFF_LP(Np, ndims, x_prev, y[i,:], muy, B, W, x_hat, V, u)
+            II      = KPFF_RKHS(Np, ndims, x_prev, grad, V)
+            x_move  = KPFF_flow(Np, ndims, stepsize, II, V)
+            x_prev.assign_add(x_move) 
+            
+        x_hat       = tf.Variable( tf.reduce_mean(x_prev, axis=0) )
+        X_filtered[i,:].assign(x_hat)
+
     return X_filtered
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -2,12 +2,11 @@
 # Set directory #
 #################
 
-# path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
-# pathdat             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/data/"
-# pathfig             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/plots/"
+path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM"
+pathdat             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/data"
+pathfig             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/plots"
 
-path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts"
-pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/data"
+# path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts"
 
 import os, sys
 os.chdir(path)
@@ -48,10 +47,8 @@ if __name__ == "__main__":
 # Unit tests drafts #
 ####################
 
-nT              = 365
-nD              = 5
-
-
+nT              = 20
+nD              = 3
 
 
 M4 = tf.random.normal((nT,nD), 0, 1, dtype=tf.float64)
@@ -64,6 +61,27 @@ np.all(
     np.round(tf.linalg.matvec( tf.transpose(M4), v4), decimals=9) == np.round(tf.reduce_sum(M5, axis=0), decimals=9)
 )
 
+
+v1              = tf.random.normal((nT,), 0, 1)
+v2              = tf.random.normal((nT,), 0, 1)
+tf.norm(v1-v2, ord='euclidean')
+
+M               = tf.Variable(tf.random.normal((nT,nD), 0, 1))
+M2              = tf.Variable(tf.random.normal((nT,nT), 0, 1))
+M3              = tf.Variable(initial_value=tf.zeros((nT,nD)))
+M4              = tf.Variable(initial_value=tf.zeros((nT,nD)))
+for i in range(nD):
+    v3 = tf.Variable(tf.zeros((nT,)))
+    for j in range(nT):
+        for k in range(nT):
+            v3[j].assign_add( M[j,i] * M2[j,k] + M2[j,k]  )
+    M3[:,i].assign_add(v3)
+            
+np.all( M3 == M4 )
+
+tf.Variable( tf.reduce_mean(M, axis=0) )
+
+        
 
 from functions import SE_kernel, SE_Cov
 
@@ -80,14 +98,31 @@ for i in range(nD):
 np.all( M == M2 )
 np.all( M == SE_Cov(nD, v) )
 
+
+
+
+
+
+M              = tf.Variable(tf.random.normal((nD,nD), dtype=tf.float32))
+v              = tf.random.normal((nD,), 0, 1)
 v2             = tf.linalg.matvec(M, v)
 M3             = tf.Variable(tf.zeros((nD,nD), dtype=tf.float32))
 for i in range(nD):
     for j in range(nD): 
-        M3[i,j].assign(v2[i] * v[j])
+        M3[i,j].assign(v[i] * M[i,j] * v[j])
+        
 np.all(
-    tf.linalg.tensordot(tf.linalg.matvec(M, v), v, axes=0) == M3
+   M3 == tf.linalg.diag(v) @ M @ tf.linalg.diag(v)
 ) 
+
+np.all( 
+    sum(v*v) == tf.linalg.tensordot(v, v, axes=1) 
+)
+
+tf.linalg.tensordot(v, v, axes=0) 
+
+
+tf.range(0.0, 1.0/1.25, 1e-3, dtype=tf.float64) * 1.25
 
 v3 = tf.random.normal((nD,), 0, 1)
 np.all( 
@@ -137,33 +172,6 @@ np.all(
 )
 
 
-X, Y = LGSSM(nT,nD)
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75, c=colors[i]) 
-    plt.plot(Y[:,i], linewidth=1, alpha=0.75, c=colors[i], linestyle='dashed') 
-plt.show() 
-
-
-    
-
-
-
-
-from functions import KalmanFilter
-
-
-
-X_fil = KalmanFilter(Y,V=tf.eye(nD)*10,W=tf.eye(nD)*10)
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75, c=colors[i]) 
-    plt.plot(X_fil[:,i], linewidth=1, alpha=0.75, c=colors[i], linestyle='dashed') 
-plt.show() 
-
-
-
-
-
-
 
 
 
@@ -177,43 +185,6 @@ np.all(
 np.all(
     tf.linalg.matvec(B, v) * (tf.eye(nD)*v2) * tf.linalg.matvec(B, v) == tf.linalg.diag(tf.linalg.matvec(B, v) * v2 * tf.linalg.matvec(B, v))
 ) 
-
-
-A       = tf.linalg.diag(tf.ones(nD)*0.98)
-X, Y    = SVSSM(nT,nD,A=A)
-
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(Y[:,i], linewidth=1, alpha=0.75)
-    plt.show() 
-
-
-
-
-
-
-
-
-
-from functions import ExtendedKalmanFilter
-
-X_f     = KalmanFilter(Y,A=A,V=tf.eye(nD)*10,W=tf.eye(nD)*10)
-
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_f[:,i], linewidth=1, alpha=0.75, linestyle='dotted') 
-    plt.show() 
-
-X_fil   = ExtendedKalmanFilter(Y,A=A)
-
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_fil[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.show() 
-
-
-
-
 
 
 
@@ -248,3 +219,27 @@ for i in range(nD):
 
 
 tf.linalg.det(tf.eye(nD)*1e-5)
+
+
+
+
+
+
+
+
+
+
+class ClassA:
+    def method_in_a(self):
+        print("Method from ClassA called.")
+
+class ClassB:
+    def call_method_from_a(self):
+        # Create an instance of ClassA
+        instance_of_a = ClassA()
+        # Call the method using the instance
+        instance_of_a.method_in_a()
+
+# Example usage:
+b_obj = ClassB()
+b_obj.call_method_from_a()
