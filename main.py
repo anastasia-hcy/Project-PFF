@@ -2,11 +2,11 @@
 # Set directory #
 #################
 
-path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM"
-pathdat             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/data"
-pathfig             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/plots"
+# path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM"
+# pathdat             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/data"
+# pathfig             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/plots"
 
-# path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts"
+path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts"
 
 import os, sys
 os.chdir(path)
@@ -52,9 +52,9 @@ nD = 3
 
 
 
+# V = tf.linalg.diag(tf.random.uniform((nD,), 1.0, 4.0, dtype=tf.float64) )
 
-
-X, Y = LGSSM(nT, nD)
+X, Y = LGSSM(nT,nD)
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(Y[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
@@ -130,14 +130,21 @@ for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_KPFF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
-    
-    
-    
-    
-    
-    
 
-A       = tf.eye(nD, dtype=tf.float64) * 0.99
+
+X_KPFF2 = KernelPFF(Y, N=10, stepsize=0.2, method="scalar")
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_KPFF2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+
+
+
+
+
+
+
+A       = tf.eye(nD, dtype=tf.float64) * 0.80
 X, Y    = SVSSM(nT, nD, A=A)
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
@@ -162,36 +169,42 @@ for i in range(nD):
     plt.plot(X_PF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
 
-X_EDH, ess_EDH = EDH(Y, N=10, A=A, stepsize=0.1)
+X_EDH, ess_EDH = EDH(Y, N=10, A=A, stepsize=0.2)
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_EDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
     
-X_EDH2, ess_EDH2 = EDH(Y, N=10, A=A, stepsize=0.1, method="EKF")
+X_EDH2, ess_EDH2 = EDH(Y, N=10, A=A, stepsize=0.2, method="EKF")
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_EDH2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
  
-X_LEDH, ess_LEDH = LEDH(Y, N=10, A=A, stepsize=0.1)
+X_LEDH, ess_LEDH = LEDH(Y, N=10, A=A, stepsize=0.2)
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
 
-X_LEDH2, ess_LEDH2 = LEDH(Y, N=10, A=A, stepsize=0.1, method="EKF")
+X_LEDH2, ess_LEDH2 = LEDH(Y, N=10, A=A, stepsize=0.2, method="EKF")
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_LEDH2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
  
+X_KPFF = KernelPFF(Y, N=100, A=A, stepsize=0.01)
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_KPFF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
 
+X_KPFF2 = KernelPFF(Y, N=10, A=A, stepsize=0.2, method="scalar")
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_KPFF2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
 
-    
-    
-    
-    
     
      
  

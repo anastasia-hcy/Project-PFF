@@ -6,38 +6,103 @@ tfd = tfp.distributions
 
 
 
+#############################################
+#  Squared Exponential Kernels & Divergence # 
+#############################################
 
 
 
+def SE_kernel(x1, x2, scale, length):
+    """
+    Squared Exponential (SE) kernel between two points, x1 and x2.
 
-def SE_kernel_div(x1, x2, length):
+    Keyword args:
+    -------------
+    x1 : float64
+    x2 : float64 
+    scale : float64. The scale parameter for the SE kernel
+    length : float64. The lengthscale parameter for the SE kernel
+
+    Returns:
+    --------
+    float64. The value of the SE kernel evaluated at x1 and x2
+    """
+    return (scale**2) * tf.math.exp( - (x1-x2)**2 / (2*length) ) 
+
+
+def SE_kernel_divC(x1, x2, length):
+    """
+    Constant part of the divergence of Squared Exponential (SE) kernel given two points, x1 and x2.
+
+    Keyword args:
+    -------------
+    x1 : float64
+    x2 : float64 
+    length : float64. The length parameter for the SE kernel
+
+    Returns:
+    --------
+    float64. The value of the constant part of the derivative SE kernel evaluated at x1.
+    """
     return - (x1-x2) / length
 
-def SE_kernel(x1, x2, scale=None, length=None):
-    scale           = 1.0 if scale is None else scale 
-    length          = 1.0 if length is None else length 
-    return (scale**2) * tf.math.exp( - (x1-x2)**2 / (2*length) )
 
-def SE_Cov(ndims, x, scale=None, length=None):
+def SE_Cov_div(ndims, x, scale=None, length=None):
+    """
+    Compute the covariance matrix and the constant part of its derivatives using the Squared Exponential (SE) kernel for a given vector, x
+
+    Keyword args:
+    -------------
+    ndims : int32. Dimension of input vector, x. 
+    x : tf.Tensor/array/list of float64. Input vector x to be evaluated. 
+    scale : float64, optional. The scale parameter for the SE kernel. Defaults to 1.0 if not provided.
+    length : float64, optional. The length parameter for the SE kernel. Defaults to 1.0 if not provided.
+
+    Returns:
+    --------
+    M : tf.Variable of float64 with shape (ndims,ndims). The covariance matrix. 
+    Md : tf.Variable of float64 with shape (ndims,ndims). The constant part of the derivatives of the covariance matrix.
+    """
     scale           = 1.0 if scale is None else scale 
     length          = 1.0 if length is None else length 
+
     M               = tf.Variable( tf.zeros((ndims,ndims), dtype=tf.float64) )
+    Md              = tf.Variable( tf.zeros((ndims,ndims), dtype=tf.float64) )
+
     for i in range(ndims): 
         for j in range(i,ndims): 
+
             v       = SE_kernel(x[i], x[j], scale=scale, length=length)
             M[i,j].assign(v)                     
             M[j,i].assign(v)                     
-    return M
+
+            vd      = SE_kernel_divC(x[i], x[j], length=length)
+            Md[i,j].assign(vd)
+            Md[j,i].assign(-vd)
+
+    return M, Md
 
 
 
-
-
-
-
+##############################
+#  Gaussian random variables # 
+############################## 
 
 
 def norm_rvs(n, mean, Sigma):
+    """
+    Generate Gaussian random variables using the Cholesky decomposition and standard Normal distribution for a given expectation and covariance matrix
+
+    Keyword args:
+    -------------
+    n : int32. Dimension of input expectation vector, mean. 
+    mean : tf.Tensor/array/list of float64 with shape (n,). Expectation of the Gaussian random variables to be generated. 
+    Sigma : tf.Tensor/array of float64 with shape (n,n). Covariance of the Gaussian random variables to be generated. 
+
+    Returns:
+    --------
+    x : tf.Tensor of float64 with shape (n,). A Gaussian random vector. 
+    """
     chol            = tf.linalg.cholesky(Sigma)
     x_par           = tf.random.normal((n,), dtype=tf.float64)
     x               = tf.linalg.matvec(chol, x_par) + mean
@@ -46,18 +111,38 @@ def norm_rvs(n, mean, Sigma):
 
 
 
-
-
+######################################
+#  Linear Gaussian State Space Model # 
+######################################
 
 
 def LGSSM(nTimes, ndims, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
-    
-    mu0             = tf.zeros((ndims,), dtype=tf.float64) if mu0 is None else mu0
-    Sigma0          = tf.eye(ndims, dtype=tf.float64) if Sigma0 is None else Sigma0
+    """
+    Generate random variables from a linear Gaussian state space model (SSM) for the given time and state dimensions, nTimes and ndims.
+
+    Keyword args:
+    -------------
+    nTimes : int32. Dimension of discrete time step of SSM.
+    ndims : int32. Dimension of state space. 
+    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The system matrix. Defaults to identity matrix if not provided.
+    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims), optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    mu0 : tf.Tensor of float64 with shape (ndims,), optional. The prior mean for initial state. Defaults to zeros if not provided.
+    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims), optional. The prior covariance for initial state. Defaults to identity matrix if not provided.
+
+    Returns:
+    --------
+    X : tf.Variable of float64 with dimension (nTimes,ndims). The states generated by the linear Gaussian SSM.
+    Y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by the linear Gaussian SSM.
+    """
     A               = tf.eye(ndims, dtype=tf.float64) if A is None else A
     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V
     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
+    
+    mu0             = tf.zeros((ndims,), dtype=tf.float64) if mu0 is None else mu0
+    Sigma0          = tf.eye(ndims, dtype=tf.float64) if Sigma0 is None else Sigma0
     
     x0              = norm_rvs(ndims, mu0, Sigma0)
     y0              = norm_rvs(ndims, x0, W)
@@ -75,6 +160,12 @@ def LGSSM(nTimes, ndims, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
         
     return X, Y
 
+
+
+###############################
+# Stochastic Volatility Model # 
+###############################
+
 def SV_transform(n, m, B, x, W, U=None):
     U               = tf.zeros((n,n), dtype=tf.float64) if U is None else U
     z               = tf.linalg.matvec(B, tf.math.exp(x/2)) 
@@ -83,6 +174,26 @@ def SV_transform(n, m, B, x, W, U=None):
 
 
 def SVSSM(nTimes, ndims, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None, muy=None):
+    """
+    Generate random variables from a linear Gaussian state space model (SSM) for the given time and state dimensions, nTimes and ndims.
+
+    Keyword args:
+    -------------
+    nTimes : int32. Dimension of discrete time step of SSM.
+    ndims : int32. Dimension of state space. 
+    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The system matrix. Defaults to diagonal matrix of 0.5 if not provided.
+    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
+
+    Returns:
+    --------
+    X : tf.Variable of float64 with dimension (nTimes,ndims). The states generated by the linear Gaussian SSM.
+    Y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by the linear Gaussian SSM.
+    """
     
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
     if A is not None and tf.reduce_max(A) > 1.0:
@@ -116,20 +227,9 @@ def SVSSM(nTimes, ndims, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None, 
 
     return X, Y
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+##########################
+# Standard Kalman Filter # 
+##########################
 
 
 def KF_Predict(x_prev, P_prev, A, V):
@@ -142,13 +242,29 @@ def KF_Gain(P, B, W):
     Minv            = tf.linalg.inv(B @ M + W) 
     return M @ Minv
 
-def KF_Filter(x_prev, P_prev, y_obs, B, K):
-    x               = x_prev + tf.linalg.matvec(K, y_obs - tf.linalg.matvec(B, x_prev))
+def KF_Filter(x_prev, P_prev, y_obs, y_prev, B, K):
+    x               = x_prev + tf.linalg.matvec(K, y_obs - y_prev)
     P               = P_prev - P_prev @ tf.transpose(B) @ tf.transpose(K)
     return x, P
 
 def KalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
-    
+    """
+    Compute the estimated states using the standard Kalman Filter given the measurements. 
+
+    Keyword args:
+    -------------
+    y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by LGSSM. 
+    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The system matrix. Defaults to identity matrix if not provided.
+    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims), optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    mu0 : tf.Tensor of float64 with shape (ndims,), optional. The prior mean for initial state. Defaults to zeros if not provided.
+    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims), optional. The prior covariance for initial state. Defaults to identity matrix if not provided.
+
+    Returns:
+    --------
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the standard Kalman Filter. 
+    """
     nTimes, ndims   = y.shape 
     mu0             = tf.zeros((ndims,), dtype=tf.float64) if mu0 is None else mu0
     Sigma0          = tf.eye(ndims, dtype=tf.float64) if Sigma0 is None else Sigma0
@@ -165,18 +281,17 @@ def KalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
     for i in range(nTimes):
         x_pred, P_pred     = KF_Predict(x_prev, P_prev, A, V)
         K                  = KF_Gain(P_pred, B, W)
-        x_filt, P_filt     = KF_Filter(x_pred, P_pred, y[i,:], B, K)
+        y_pred             = tf.linalg.matvec(B, x_pred)
+        x_filt, P_filt     = KF_Filter(x_pred, P_pred, y[i,:], y_pred, B, K)
         x_prev, P_prev     = x_filt, P_filt        
         X_filtered[i,:].assign(x_prev)
         
     return X_filtered
 
 
-
-
-
-
-
+##########################
+# Extended Kalman Filter # 
+##########################
 
 
 
@@ -202,7 +317,24 @@ def EKF_Filter(x_prev, P_prev, y_obs, y_prev, Jx, K):
     return x, P
 
 def ExtendedKalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None, muy=None):
-    
+    """
+    Compute the estimated states using the Extended Kalman Filter given the measurements. 
+
+    Keyword args:
+    -------------
+    y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by SVSSM. 
+    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The system matrix. Defaults to diagonal matrix of 0.5 if not provided.
+    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
+
+    Returns:
+    --------
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the Extended Kalman Filter. 
+    """
     nTimes, ndims   = y.shape 
     
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
@@ -237,16 +369,9 @@ def ExtendedKalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=Non
     return X_filtered
 
 
-
-
-
-
-
-
-
-
-
-
+###########################
+# Unscented Kalman Filter # 
+###########################
 
 def SigmaWeights(ndims, alpha=None, kappa=None, beta=None):
     alpha           = 1.0 if alpha is None else alpha
@@ -296,7 +421,23 @@ def UKF_Filter(x1, P1, Wn, y_obs, y_pred, K):
     return x, P
 
 def UnscentedKalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
+    """
+    Compute the estimated states using the Unscented Kalman Filter given the measurements. 
+
+    Keyword args:
+    -------------
+    y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by SVSSM. 
+    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The system matrix. Defaults to diagonal matrix of 0.5 if not provided.
+    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
     
+    Returns:
+    --------
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the Unscented Kalman Filter. 
+    """
     nTimes, ndims   = y.shape 
     
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
@@ -360,6 +501,10 @@ def UnscentedKalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=No
 
 
 
+
+############################
+# Standard Particle Filter # 
+############################
 
 
 
@@ -428,17 +573,32 @@ def multinomial_resample(N, x, w):
     wbar            = tf.ones((N,), dtype=tf.float64) / N 
     return xbar, wbar 
 
-
 def compute_posterior(w, x):
     return tf.linalg.matvec( tf.transpose(x), w ) 
-    # Ex              = tf.Variable(tf.zeros((N,n))) 
-    # for i in range(N):
-    #     Ex[i,:].assign(w[i] * x[i,:])
-    # return tf.reduce_sum(Ex, axis=0)
-
-
 
 def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sigma0=None, muy=None):
+    """
+    Compute the estimated states using the standard Particle Filter given the measurements. 
+
+    Keyword args:
+    -------------
+    y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by SVSSM. 
+    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The system matrix. Defaults to diagonal matrix of 0.5 if not provided.
+    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    N : int32, optional. Defaults to 1000 if not provided.
+    resample : Bool, optional. Defaults to True if not provided. 
+    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
+
+    Returns:
+    --------
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the standard Particle Filter. 
+    ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes. 
+    """
+    
     nTimes, ndims   = y.shape 
 
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
@@ -456,7 +616,7 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
 
     N               = 1000 if N is None else N
-    resample        = False if resample is None else resample
+    resample        = True if resample is None else resample
     NT              = N/2
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
 
@@ -534,7 +694,7 @@ def EDH_linearize_EKF(N, n, xprev, xhat, Pprev, A, B, V, W, muy, U):
     
     y_pred          = SV_transform(n, muy, B, m_pred, W, U) 
     Jx, Jw          = EKF_Jacobi(m_pred, y_pred, B)
-    Cy              = Jw @ tf.transpose(Jw)
+    Cy              = Jw @ W @ tf.transpose(Jw)
     err             = y_pred - tf.linalg.matvec(Jx, m_pred) 
     
     return eta, eta0, m_pred, P_pred, y_pred, Jx, Jw, Cy, err 
@@ -587,7 +747,29 @@ def EDH_flow_lp(N, eta0, eta1, xprev, y, SigmaX, muy, SigmaY, U):
     return Lp
 
 def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
+    """
+    Compute the estimated states using the ... ... given the measurements. 
 
+    Keyword args:
+    -------------
+    y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by SVSSM. 
+    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The system matrix. Defaults to diagonal matrix of 0.5 if not provided.
+    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    N : int32, optional. Defaults to 1000 if not provided.
+    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
+    method : str, optional. The linearization method. Defaults to "UKF" if not provided.  
+    stepsize : float64, optional. The stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
+    
+    Returns:
+    --------
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the ... ... .
+    ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes. 
+    """
+    
     nTimes, ndims   = y.shape 
 
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
@@ -639,10 +821,7 @@ def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=No
             
         eta1        = eta0
         for j in range(Nl): 
-            # try:
             eta1_move, eta_move                                         = EDH_flow_dynamics(Np, ndims, Rates[j], stepsize, I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
-            # except: 
-                # return x_prev, eta0, m_pred, P_pred, y_pred, H, R, el 
             eta.assign_add(eta_move)
             eta1.assign_add(eta1_move)
             
@@ -818,8 +997,30 @@ def LEDH_flow_lp(N, eta0, theta, eta1, xprev, y, SigmaX, muy, SigmaY, U):
         Lp[i].assign( tf.math.log(theta[i]) + LogLikelihood(eta1[i,:], y, muy, SigmaY, U) + LogTarget(eta1[i,:], xprev[i,:], SigmaX[i,:,:]) - LogImportance(eta0[i,:], xprev[i,:], SigmaX[i,:,:]) )  
     return Lp
 
-def LEDH(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
+def LEDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
+    """
+    Compute the estimated states using the ... ...  given the measurements. 
 
+    Keyword args:
+    -------------
+    y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by SVSSM. 
+    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The system matrix. Defaults to diagonal matrix of 0.5 if not provided.
+    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    N : int32, optional. Defaults to 1000 if not provided.
+    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
+    method : str, optional. The linearization method. Defaults to "UKF" if not provided.  
+    stepsize : float64, optional. The stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
+    
+    Returns:
+    --------
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the ... ... .
+    ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes. 
+    """
+    
     nTimes, ndims   = y.shape 
 
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
@@ -838,9 +1039,6 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sig
 
     N               = 1000 if N is None else N
     Np              = N
-    
-    resample        = False if resample is None else resample
-    NT              = Np / 2
 
     method          = "UKF" if method is None else method 
     weight0_m, weight0_c, weighti, L = SigmaWeights(ndims)
@@ -923,32 +1121,27 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sig
 
 
 def Hu21eq13(y, ypred, Jx, Jw, W, U):
-    Rinv = tf.linalg.inv( Jw @ W @ tf.transpose(Jw) + U )
-    yhat = y - ypred
-    return tf.linalg.matvec( tf.transpose(Jx) @ Rinv, yhat)
+    Rinv            = tf.linalg.inv( Jw @ W @ tf.transpose(Jw) + U )
+    return tf.linalg.matvec( tf.transpose(Jx) @ Rinv, y - ypred)
 
-def Hu21eq15(xpred, x0, Sigma0):
-    return tf.linalg.matvec( tf.linalg.inv(Sigma0), xpred - x0)
+def Hu21eq15(xpred, x0, Sigma0, U):
+    return tf.linalg.matvec( tf.linalg.inv(Sigma0 + U), xpred - x0)
 
 def KPFF_LP(N, n, x, y, muy, B, W, mu0, Sigma0, U):
     LP              = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
     for i in range(N):
         yi_pred     = SV_transform(n, muy, B, x[i,:], W, U)
         Hx, Hw      = EKF_Jacobi(x[i,:], yi_pred, B)
-        lpi         = Hu21eq13(y, yi_pred, Hx, Hw, W, U) - Hu21eq15(x[i,:], mu0, Sigma0)
+        lpi         = Hu21eq13(y, yi_pred, Hx, Hw, W, U) - Hu21eq15(x[i,:], mu0, Sigma0, U)
         LP[i,:].assign(lpi)
     return LP
 
 def KPFF_RKHS(N, n, x, Lp, Sigma0):
     In              = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
     for i in range(n): 
-        for j in range(N):
-            val = 0.0
-            for k in range(N):
-                K   = SE_kernel(x[j,i], x[k,i], length=Sigma0[i,i])
-                Kd  = SE_kernel_div(x[j,i], x[k,i], length=Sigma0[i,i]) 
-                val += 1/N * ( Lp[j,i] * K + Kd ) 
-            In[j,i].assign(val) 
+        K, Kc       = SE_Cov_div(N, x[:,i], length=Sigma0[i,i])
+        for j in range(N): 
+            In[j,i].assign( tf.reduce_sum(1/N * ( Lp[j,i] * K[j,:] + Kc[j,:] * K[j,:] )) )
     return In
 
 def KPFF_flow(N, n, epsilon, integral, Sigma0):
@@ -959,8 +1152,30 @@ def KPFF_flow(N, n, epsilon, integral, Sigma0):
     return xadd 
 
 
-def KernelPFF(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=None, stepsize=None):
+def KernelPFF(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
+    """
+    Compute the estimated states using the  ... ... ...  given the measurements. 
 
+    Keyword args:
+    -------------
+    y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by SVSSM. 
+    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The system matrix. Defaults to diagonal matrix of 0.5 if not provided.
+    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    N : int32, optional. Defaults to 1000 if not provided.
+    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
+    method : str, optional. The linearization method. Defaults to "kernel" if not provided.  
+    stepsize : float64, optional. The stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
+    
+    Returns:
+    --------
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the ... ... .
+    ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes. 
+    """
+    
     nTimes, ndims   = y.shape 
 
     A               = tf.eye(ndims, dtype=tf.float64) * 0.5 if A is None else A
@@ -980,6 +1195,8 @@ def KernelPFF(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, 
     N               = 1000 if N is None else N
     Np              = N
     
+    method          = "kernel" if method is None else method 
+
     stepsize        = 1e-3 if stepsize is None else stepsize 
     if stepsize is not None and stepsize >= 1.0:
         raise ValueError("Step-size out of range [0,1).")
@@ -990,19 +1207,28 @@ def KernelPFF(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, 
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
 
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))  
-      
+    # Cx, _           = SE_Cov_div(ndims, tf.range(ndims, dtype=tf.float64)+1, length=2)
+
     for i in range(nTimes): 
         
-        x_prev      = initiate_particles(N, ndims, mu0, Sigma0)
-        x_hat       = tf.Variable( tf.reduce_mean(x_prev, axis=0) )
-        
+        x_prev      = initiate_particles(Np, ndims, mu0, Sigma0)
+        x_hat       = tf.Variable(tf.reduce_mean(x_prev, axis=0))
+        # CovX        = tf.transpose(x_prev - x_hat) @ (x_prev - x_hat) * Cx 
+        CovYinv     = tf.linalg.inv( tf.tensordot(y[i,:], y[i,:], axes=1) / (ndims-1) + u )
+
         for _ in range(Nl): 
-            grad    = KPFF_LP(Np, ndims, x_prev, y[i,:], muy, B, W, x_hat, V, u)
-            II      = KPFF_RKHS(Np, ndims, x_prev, grad, V)
-            x_move  = KPFF_flow(Np, ndims, stepsize, II, V)
+
+            grad    = KPFF_LP(Np, ndims, x_prev, y[i,:], muy, B, W, x_hat, Sigma0, u)
+
+            if method == "kernel":
+                II  = KPFF_RKHS(Np, ndims, x_prev, grad, Sigma0)
+            if method == "scalar":
+                II  = grad / Np
+
+            x_move  = KPFF_flow(Np, ndims, stepsize, II, Sigma0)
             x_prev.assign_add(x_move) 
-            
-        x_hat       = tf.Variable( tf.reduce_mean(x_prev, axis=0) )
+
+        x_hat       = tf.Variable( tf.reduce_mean(x_prev, axis=0) )            
         X_filtered[i,:].assign(x_hat)
 
     return X_filtered
