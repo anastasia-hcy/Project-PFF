@@ -1,6 +1,6 @@
 # Project-PFF
 
-## Master branch - Codebase 
+## master branch - codebase 
 
 #### functions.py 
 - The script that contains the functions for implementing all methodologies
