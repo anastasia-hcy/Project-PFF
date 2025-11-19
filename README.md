@@ -6,7 +6,7 @@
 - The script that contains the functions for implementing all methodologies
 
 #### testings.py
-- The script used for unit and integration testing
+- The script for unit and integration testing
 
 #### main.py
-- The script used for writing the report
+- The script for simulations and generating plots
