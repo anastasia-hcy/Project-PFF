@@ -110,7 +110,6 @@ def norm_rvs(n, mean, Sigma):
 
 
 
-
 ######################################
 #  Linear Gaussian State Space Model # 
 ######################################
@@ -293,17 +292,24 @@ def KalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
 # Extended Kalman Filter # 
 ##########################
 
-
-
 def EKF_Predict(x_prev, P_prev, A, V):
     x               = tf.linalg.matvec(A, x_prev)
     P               = A @ P_prev @ tf.transpose(A) + V
     return x, P 
 
 def EKF_Jacobi(x, y, B):
+
     Jx              = tf.linalg.diag(y/2)
+    Jx2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jx), Jx > 0.0) , tf.cast(1e8, tf.float64), Jx)
+    Jx2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jx), Jx < 0.0) , tf.cast(-1e8, tf.float64), Jx2)
+    Jx2             = tf.where( tf.math.is_nan(Jx), tf.cast(1.0, tf.float64), Jx2)
+
     Jw              = tf.linalg.diag(tf.linalg.matvec(B, tf.math.exp(x/2)))
-    return Jx, Jw
+    Jw2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jw), Jw > 0.0) , tf.cast(1e8, tf.float64), Jw)
+    Jw2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jw), Jw < 0.0) , tf.cast(-1e8, tf.float64), Jw2)
+    Jw2             = tf.where( tf.math.is_nan(Jw), tf.cast(1.0, tf.float64), Jw2)
+
+    return Jx, Jw2
 
 def EKF_Gain(P, Jx, Jw, W, U):
     Mx              = P @ tf.transpose(Jx)
@@ -494,18 +500,9 @@ def UnscentedKalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=No
 
 
 
-
-
-
-
-
-
-
-
-############################
-# Standard Particle Filter # 
-############################
-
+#################################
+# Functions for Particle Filter # 
+#################################
 
 
 def initiate_particles(N, n, mu0, Sigma0):
@@ -513,20 +510,6 @@ def initiate_particles(N, n, mu0, Sigma0):
     for i in range(N):  
         x0[i,:].assign( norm_rvs(n, mu0, Sigma0) )
     return x0 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def draw_particles(N, n, y, xprev, SigmaX, muy, SigmaY, Sigma0, U):
@@ -561,9 +544,11 @@ def compute_weights(w0, Lp):
     return tf.math.exp( tf.math.log(w0) + Lp )
 
 def normalize_weights(w):
+    """Normalize the weights, w : tf.Tensor of float64, and return the normalized weights, tf.Tensor of float64, that sum up to one."""
     return w / tf.reduce_sum(w)
 
 def compute_ESS(w):
+    """Use the weights, w : tf.Tensor of float64, and return the effective sample size, tf.Tensor of float64."""
     return 1 / tf.reduce_sum(w**2)
 
 def multinomial_resample(N, x, w):
@@ -575,6 +560,13 @@ def multinomial_resample(N, x, w):
 
 def compute_posterior(w, x):
     return tf.linalg.matvec( tf.transpose(x), w ) 
+
+
+
+############################
+# Standard Particle Filter # 
+############################
+
 
 def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sigma0=None, muy=None):
     """
@@ -622,6 +614,7 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
 
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
+    Weights         = tf.Variable(tf.zeros((nTimes,N), dtype=tf.float64))
 
     x_prev          = initiate_particles(N, ndims, mu0, Sigma0)
     w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
@@ -644,11 +637,9 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
 
         ESS[i].assign(ness)
         X_filtered[i,:].assign(x_filt) 
+        Weights[i,:].assign(w_norm)
 
-    return X_filtered, ESS
-
-
-
+    return X_filtered, ESS, Weights
 
 
 
@@ -656,8 +647,21 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
 
 
 
+######################## 
+#  Stability functions # 
+######################## 
+
+def conditioning(J, U):
+    """Compute the conditioning number of Jacobian matrix with the 2-norm"""
+    norm        = tf.norm(J, ord=2)
+    Jinv        = tf.linalg.inv(J + U)
+    norminv     = tf.norm(Jinv, ord=2)
+    return norm * norminv
 
 
+##############################
+# Particle Flow Filter - EDH # 
+##############################
 
 
 def Li17eq10(L, H, P, R, U):
@@ -672,35 +676,16 @@ def Li17eq11(I, L, A, H, P, R, y, ei, e0i, U):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-def EDH_linearize_EKF(N, n, xprev, xhat, Pprev, A, B, V, W, muy, U): 
-    
+def EDH_linearize_EKF(N, n, xprev, xhat, Pprev, A, V, U): 
     m_pred, P_pred  = EKF_Predict(xhat, Pprev, A, V) 
-    
     eta             = tf.Variable(m_pred)
     eta0            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
     for i in range(N):
-        eta0[i,:].assign( norm_rvs(n, xprev[i,:], P_pred + U) )
-    
-    y_pred          = SV_transform(n, muy, B, m_pred, W, U) 
-    Jx, Jw          = EKF_Jacobi(m_pred, y_pred, B)
-    Cy              = Jw @ W @ tf.transpose(Jw)
-    err             = y_pred - tf.linalg.matvec(Jx, m_pred) 
-    
-    return eta, eta0, m_pred, P_pred, y_pred, Jx, Jw, Cy, err 
+        eta0[i,:].assign( norm_rvs(n, xprev[i,:], P_pred + U) )    
+    return eta, eta0, m_pred, P_pred 
 
 
-def EDH_linearize_UKF(N, n, xprev, xhat, Pprev, A, B, V, W, wm, wc, wi, L, U):
+def EDH_linearize_UKF(N, n, xprev, xhat, Pprev, A, V, wm, wc, wi, L, U):
         
     Xprev_sp        = SigmaPoints(n, xhat, Pprev, L)
     X_sp            = Xprev_sp @ tf.transpose(A) 
@@ -708,27 +693,12 @@ def EDH_linearize_UKF(N, n, xprev, xhat, Pprev, A, B, V, W, wm, wc, wi, L, U):
     m_pred          = UKF_Predict_mean(wm, wi, X_sp) 
     P_pred          = UKF_Predict_cov(n, wc, wi, X_sp, m_pred, U, Cov=V)  
     
-    x_pred0         = tf.Variable(tf.zeros((n*2,), dtype=tf.float64))
-    x_pred0[:n].assign(m_pred)
-    P_pred0         = tf.Variable(tf.zeros((n*2,n*2), dtype=tf.float64))
-    P_pred0[n:n*2,n:n*2].assign(W)     
-    P_pred0[0:n,0:n].assign(P_pred)
-    
-    Xpred_sp        = SigmaPoints(n*2, x_pred0, P_pred0, L)
-    Y_sp            = tf.math.exp(Xpred_sp[:,:n]/2) @ tf.transpose(B) * Xpred_sp[:,n:]
-    
-    y_pred          = UKF_Predict_mean(wm, wi, Y_sp)
-    W_pred          = UKF_Predict_cov(n, wc, wi, Y_sp, y_pred, U)
-    Jx, _           = EKF_Jacobi(m_pred, y_pred, B)
-    err             = y_pred - tf.linalg.matvec(Jx, m_pred) 
-    
     eta             = tf.Variable(m_pred) 
     eta0            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
     for i in range(N): 
         eta0[i,:].assign( norm_rvs(n, xprev[i,:], P_pred + U) )   
         
-    return eta, eta0, m_pred, P_pred, y_pred, Jx, W_pred, err, Xpred_sp, Y_sp
-
+    return eta, eta0, m_pred, P_pred 
 
 
 def EDH_flow_dynamics(N, n, Lamb, epsilon, I, e, e0, P, H, R, er, y, U):
@@ -746,9 +716,11 @@ def EDH_flow_lp(N, eta0, eta1, xprev, y, SigmaX, muy, SigmaY, U):
         Lp[i].assign( LogLikelihood(eta1[i,:], y, muy, SigmaY, U) + LogTarget(eta1[i,:], xprev[i,:], SigmaX) - LogImportance(eta0[i,:], xprev[i,:], SigmaX) )  
     return Lp
 
+
+
 def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
     """
-    Compute the estimated states using the ... ... given the measurements. 
+    Compute the estimated states using the EDH given the measurements. 
 
     Keyword args:
     -------------
@@ -766,7 +738,7 @@ def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=No
     
     Returns:
     --------
-    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the ... ... .
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the EDH.
     ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes. 
     """
     
@@ -806,6 +778,9 @@ def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=No
 
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
+    Weights         = tf.Variable(tf.zeros((nTimes, Np), dtype=tf.float64))
+    Jacobi_X        = tf.Variable(tf.zeros((nTimes,ndims,ndims), dtype=tf.float64))
+    Jacobi_W        = tf.Variable(tf.zeros((nTimes,ndims,ndims), dtype=tf.float64))
     
     x_filt          = tf.Variable(mu0, dtype=tf.float64)
     P_prev          = A @ Sigma0 @ tf.transpose(A) + V 
@@ -815,37 +790,65 @@ def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=No
     for i in range(nTimes): 
 
         if method == "UKF":        
-            eta, eta0, m_pred, P_pred, y_pred, H, R, el, xsp, ysp       = EDH_linearize_UKF(Np, ndims, x_prev, x_filt, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, u)
-        if method == "EKF":            
-            eta, eta0, m_pred, P_pred, y_pred, H, Hw, R, el             = EDH_linearize_EKF(Np, ndims, x_prev, x_filt, P_prev, A, B, V, W, muy, u)
+            eta, eta0, m_pred, P_pred   = EDH_linearize_UKF(Np, ndims, x_prev, x_filt, P_prev, A, V, weight0_m, weight0_c, weighti, L, u)
+
+            x_pred0                     = tf.Variable(tf.zeros((ndims*2,), dtype=tf.float64))
+            P_pred0                     = tf.Variable(tf.zeros((ndims*2,ndims*2), dtype=tf.float64))
+
+            x_pred0[:ndims].assign(m_pred)
+            P_pred0[ndims:ndims*2,ndims:ndims*2].assign(W)     
+            P_pred0[0:ndims,0:ndims].assign(P_pred)
             
+            xsp                         = SigmaPoints(ndims*2, x_pred0, P_pred0, L)
+            ysp                         = tf.math.exp(xsp[:,:ndims]/2) @ tf.transpose(B) * xsp[:,ndims:]
+            
+            y_pred                      = UKF_Predict_mean(weight0_m, weighti, ysp)
+            R                           = UKF_Predict_cov(ndims, weight0_c, weighti, ysp, y_pred, u)
+            H, Hw                       = EKF_Jacobi(m_pred, y_pred, B)
+            el                          = y_pred - tf.linalg.matvec(H, m_pred) 
+            
+
+        if method == "EKF":            
+            eta, eta0, m_pred, P_pred   = EDH_linearize_EKF(Np, ndims, x_prev, x_filt, P_prev, A, V, u)
+
+            y_pred                      = SV_transform(ndims, muy, B, m_pred, W, u) 
+            H, Hw                       = EKF_Jacobi(m_pred, y_pred, B)
+            R                           = Hw @ W @ tf.transpose(Hw)
+            el                          = y_pred - tf.linalg.matvec(H, m_pred) 
+            
+        Jacobi_X[i,:,:].assign( H )
+        Jacobi_W[i,:,:].assign( Hw )
+
         eta1        = eta0
         for j in range(Nl): 
-            eta1_move, eta_move                                         = EDH_flow_dynamics(Np, ndims, Rates[j], stepsize, I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
+            eta1_move, eta_move         = EDH_flow_dynamics(Np, ndims, Rates[j], stepsize, I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
             eta.assign_add(eta_move)
             eta1.assign_add(eta1_move)
             
-        lp          = EDH_flow_lp(Np, eta0, eta1, x_prev, y[i,:], P_pred, muy, W, u)     
-        w_pred      = compute_weights(w_prev, lp)
-        w_norm      = normalize_weights(w_pred)        
-        ness        = compute_ESS(w_norm)
+        lp                              = EDH_flow_lp(Np, eta0, eta1, x_prev, y[i,:], P_pred, muy, W, u)     
+        w_pred                          = compute_weights(w_prev, lp)
+        w_norm                          = normalize_weights(w_pred)        
+        ness                            = compute_ESS(w_norm)
 
-        x_filt      = compute_posterior(w_norm, eta1)
-        x_prev      = eta1
+        x_filt                          = compute_posterior(w_norm, eta1)
+        x_prev                          = eta1
 
         ESS[i].assign(ness)
+        Weights[i,:].assign(w_norm)
         X_filtered[i,:].assign(x_filt) 
         
         if method == "UKF":
-            C_pred          = UKF_Predict_crosscov(ndims, weight0_c, weighti, xsp[:,:ndims], m_pred, ysp, y_pred, u) 
-            K               = UKF_Gain(C_pred, R, u)
-            _, P_filt       = UKF_Filter(m_pred, P_pred, R, y[i,:], y_pred, K)
+            C_pred                      = UKF_Predict_crosscov(ndims, weight0_c, weighti, xsp[:,:ndims], m_pred, ysp, y_pred, u) 
+            K                           = UKF_Gain(C_pred, R, u)
+            _, P_filt                   = UKF_Filter(m_pred, P_pred, R, y[i,:], y_pred, K)
+
         if method == "EKF":    
-            K               = EKF_Gain(P_pred, H, Hw, W, u)
-            _, P_filt       = EKF_Filter(m_pred, P_pred, y[i,:], y_pred, H, K)
+            K                           = EKF_Gain(P_pred, H, Hw, W, u)
+            _, P_filt                   = EKF_Filter(m_pred, P_pred, y[i,:], y_pred, H, K)
+
         P_prev      = P_filt
         
-    return X_filtered, ESS
+    return X_filtered, ESS, Weights, Jacobi_X, Jacobi_W
 
 
 
@@ -853,19 +856,9 @@ def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=No
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+##############################
+# Particle Flow Filter - LEDH # 
+##############################
 
 
 
@@ -882,6 +875,7 @@ def LEDH_linearize_EKF(N, n, xprev, Pprev, A, B, V, W, muy, U):
     Cy              = tf.Variable(tf.zeros((N,n,n), dtype=tf.float64))
     err             = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
 
+    
     for i in range(N): 
 
         mi_pred, Pi_pred        = EKF_Predict(xprev[i,:], Pprev[i,:,:], A, V) 
@@ -900,6 +894,7 @@ def LEDH_linearize_EKF(N, n, xprev, Pprev, A, B, V, W, muy, U):
         
         Cy[i,:,:].assign( Jwi @ W @ tf.transpose(Jwi) )
         err[i,:].assign( yi_pred - tf.linalg.matvec(Jxi, eta[i,:]) )
+        
 
     return eta, eta0, m, P, y, H, Hw, Cy, err
 
@@ -920,6 +915,7 @@ def LEDH_linearize_UKF(N, n, xprev, Pprev, A, B, V, W, wm, wc, wi, L, U):
 
     y               = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
     H               = tf.Variable(tf.zeros((N,n,n), dtype=tf.float64))
+    Hw              = tf.Variable(tf.zeros((N,n,n), dtype=tf.float64))
     Cy              = tf.Variable(tf.zeros((N,n,n), dtype=tf.float64))
     err             = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
 
@@ -956,13 +952,15 @@ def LEDH_linearize_UKF(N, n, xprev, Pprev, A, B, V, W, wm, wc, wi, L, U):
         y[i,:].assign(yi_pred)
         
         W_pred      = UKF_Predict_cov(n, wc, wi, Y_sp, yi_pred, U)
-        Jxi, _      = EKF_Jacobi(eta[i,:], yi_pred, B)
+        Jxi, Jwi    = EKF_Jacobi(eta[i,:], yi_pred, B)
+        
         H[i,:,:].assign( Jxi )
+        Hw[i,:,:].assign( Jwi )
         
         Cy[i,:,:].assign( W_pred )
         err[i,:].assign( yi_pred - tf.linalg.matvec(Jxi, eta[i,:]) )        
     
-    return eta, eta0, m, P, y, H, Cy, err, XSP, YSP
+    return eta, eta0, m, P, y, H, Hw, Cy, err, XSP, YSP
 
 
 def LEDH_update_UKF(N, n, m0, P0, y, yhat, Hw, Xsp, Ysp, wc, wi, U):
@@ -999,7 +997,7 @@ def LEDH_flow_lp(N, eta0, theta, eta1, xprev, y, SigmaX, muy, SigmaY, U):
 
 def LEDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
     """
-    Compute the estimated states using the ... ...  given the measurements. 
+    Compute the estimated states using the LEDH given the measurements. 
 
     Keyword args:
     -------------
@@ -1017,7 +1015,7 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=N
     
     Returns:
     --------
-    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the ... ... .
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the LEDH. 
     ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes. 
     """
     
@@ -1055,6 +1053,10 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=N
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
     I               = tf.eye(ndims, dtype=tf.float64)
 
+    JacobiX         = tf.Variable(tf.zeros((nTimes, Np, ndims, ndims), dtype=tf.float64))
+    JacobiW         = tf.Variable(tf.zeros((nTimes, Np, ndims, ndims), dtype=tf.float64))
+    
+    Weights         = tf.Variable(tf.zeros((nTimes, Np), dtype=tf.float64))
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
 
@@ -1069,17 +1071,18 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=N
     for i in range(nTimes): 
 
         if method == "UKF":        
-            eta, eta0, m_pred, P_pred, y_pred, H, R, el, xsp, ysp       = LEDH_linearize_UKF(Np, ndims, x_prev, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, u)
+            eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el, xsp, ysp = LEDH_linearize_UKF(Np, ndims, x_prev, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, u)
         if method == "EKF":            
-            eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el            = LEDH_linearize_EKF(Np, ndims, x_prev, P_prev, A, B, V, W, muy, u)
-              
+            eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el = LEDH_linearize_EKF(Np, ndims, x_prev, P_prev, A, B, V, W, muy, u)
+        
+        JacobiX[i,:].assign(H)
+        JacobiW[i,:].assign(Hiw)
+        
         eta1        = eta0
         theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
         for j in range(Nl): 
-            # try:
             eta1_move, eta_move, theta_prod     = LEDH_flow_dynamics(Np, ndims, Rates[j], stepsize, I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
-            # except: 
-                # return x_prev, eta, eta0, m_pred, P_pred, y_pred, H, R, el 
+
             
             eta.assign_add(eta_move)
             eta1.assign_add(eta1_move)
@@ -1096,6 +1099,7 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=N
 
         ESS[i].assign(ness)
         X_filtered[i,:].assign(x_filt) 
+        Weights[i,:].assign(w_norm)
         
         if method == "UKF":
             P_filt  = LEDH_update_UKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, R, xsp, ysp, weight0_c, weighti, u) 
@@ -1103,7 +1107,7 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=N
             P_filt  = LEDH_update_EKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, H, Hiw, W, u)
         P_prev      = P_filt
         
-    return X_filtered, ESS
+    return X_filtered, ESS, Weights, JacobiX, JacobiW
 
 
 
@@ -1112,6 +1116,10 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=N
 
 
 
+
+#####################################
+# Particle Flow Filter - Kernel PFF # 
+#####################################
 
 
 
@@ -1128,13 +1136,17 @@ def Hu21eq15(xpred, x0, Sigma0, U):
     return tf.linalg.matvec( tf.linalg.inv(Sigma0 + U), xpred - x0)
 
 def KPFF_LP(N, n, x, y, muy, B, W, mu0, Sigma0, U):
+    JxC             = tf.Variable(tf.zeros((N,n,n), dtype=tf.float64)) 
+    JwC             = tf.Variable(tf.zeros((N,n,n), dtype=tf.float64)) 
     LP              = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
     for i in range(N):
         yi_pred     = SV_transform(n, muy, B, x[i,:], W, U)
         Hx, Hw      = EKF_Jacobi(x[i,:], yi_pred, B)
         lpi         = Hu21eq13(y, yi_pred, Hx, Hw, W, U) - Hu21eq15(x[i,:], mu0, Sigma0, U)
         LP[i,:].assign(lpi)
-    return LP
+        JxC[i,:,:].assign( Hx )
+        JwC[i,:,:].assign( Hw )
+    return LP, JxC, JwC
 
 def KPFF_RKHS(N, n, x, Lp, Sigma0):
     In              = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
@@ -1154,7 +1166,7 @@ def KPFF_flow(N, n, epsilon, integral, Sigma0):
 
 def KernelPFF(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
     """
-    Compute the estimated states using the  ... ... ...  given the measurements. 
+    Compute the estimated states using the Kernel PFF given the measurements. 
 
     Keyword args:
     -------------
@@ -1172,7 +1184,7 @@ def KernelPFF(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, 
     
     Returns:
     --------
-    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the ... ... .
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the Kernel PFF.
     ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes. 
     """
     
@@ -1203,22 +1215,22 @@ def KernelPFF(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, 
     if stepsize is not None and stepsize  < 0.0:
         raise ValueError("Step-size out of range [0,1).")
     
-    Nl              = int(1/stepsize)    
+    Nl              = int(1/stepsize)
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
 
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))  
-    # Cx, _           = SE_Cov_div(ndims, tf.range(ndims, dtype=tf.float64)+1, length=2)
-
+    JacobiX         = tf.Variable(tf.zeros((nTimes, Nl, Np, ndims,ndims), dtype=tf.float64))  
+    JacobiW         = tf.Variable(tf.zeros((nTimes, Nl, Np, ndims,ndims), dtype=tf.float64))  
+    
     for i in range(nTimes): 
         
         x_prev      = initiate_particles(Np, ndims, mu0, Sigma0)
         x_hat       = tf.Variable(tf.reduce_mean(x_prev, axis=0))
         # CovX        = tf.transpose(x_prev - x_hat) @ (x_prev - x_hat) * Cx 
-        CovYinv     = tf.linalg.inv( tf.tensordot(y[i,:], y[i,:], axes=1) / (ndims-1) + u )
 
-        for _ in range(Nl): 
+        for j in range(Nl): 
 
-            grad    = KPFF_LP(Np, ndims, x_prev, y[i,:], muy, B, W, x_hat, Sigma0, u)
+            grad, Jx, Jw = KPFF_LP(Np, ndims, x_prev, y[i,:], muy, B, W, x_hat, Sigma0, u)
 
             if method == "kernel":
                 II  = KPFF_RKHS(Np, ndims, x_prev, grad, Sigma0)
@@ -1227,12 +1239,14 @@ def KernelPFF(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, 
 
             x_move  = KPFF_flow(Np, ndims, stepsize, II, Sigma0)
             x_prev.assign_add(x_move) 
+            
+            JacobiX[i,j,:,:,:].assign( Jx )
+            JacobiW[i,j,:,:,:].assign( Jw )
 
         x_hat       = tf.Variable( tf.reduce_mean(x_prev, axis=0) )            
         X_filtered[i,:].assign(x_hat)
 
-    return X_filtered
-
+    return X_filtered, JacobiX, JacobiW
 
 
 

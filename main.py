@@ -2,11 +2,11 @@
 # Set directory #
 #################
 
-# path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM"
+path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM"
 # pathdat             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/data"
 # pathfig             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/plots"
 
-path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts"
+# path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts"
 
 import os, sys
 os.chdir(path)
@@ -14,6 +14,8 @@ cwd = os.getcwd()
 print(f"Current working directory is: {cwd}")
 sys.path.append(cwd)
 
+tf.constant([tf.eye(3).numpy() for _ in range(2)], dtype=tf.float64)
+        
 
 ############# 
 # Libraries #
@@ -46,13 +48,6 @@ nT = 100
 nD = 3
 
 
-
-
-
-
-
-
-# V = tf.linalg.diag(tf.random.uniform((nD,), 1.0, 4.0, dtype=tf.float64) )
 
 X, Y = LGSSM(nT,nD)
 for i in range(nD):
@@ -144,7 +139,7 @@ for i in range(nD):
 
 
 
-A       = tf.eye(nD, dtype=tf.float64) * 0.80
+A       = tf.eye(nD, dtype=tf.float64) * 0.99
 X, Y    = SVSSM(nT, nD, A=A)
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
