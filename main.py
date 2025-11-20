@@ -28,22 +28,35 @@ import tensorflow_probability as tfp
 tfd = tfp.distributions
 tf.random.set_seed(123)
 
+import psutil
+import time
+
+from functions import SE_Cov_div
 from functions import LGSSM, SVSSM
 from functions import KalmanFilter, ExtendedKalmanFilter, UnscentedKalmanFilter
 from functions import ParticleFilter
 from functions import EDH, LEDH, KernelPFF
 
-############ 
-# Simulate #
-############
 
 
 
 nT = 100
-nD = 5
+nD = 4
+Np = 500
+Cx, DivCx = SE_Cov_div(nD, tf.random.normal((nD,), dtype=tf.float64), scale=1.25, length=2.0)
 
+    
+    
 
+def get_current_process_ram_usage():
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    rss_mib = memory_info.rss / (1024 ** 2)  # Convert to MiB
+    vms_mib = memory_info.vms / (1024 ** 2)  # Convert to MiB
+    print(f"Current process RAM usage (RSS): {rss_mib:.2f} MiB")
+    print(f"Current process RAM usage (VMS): {vms_mib:.2f} MiB")
 
+get_current_process_ram_usage()
 
 
 X, Y = LGSSM(nT,nD)
@@ -51,38 +64,108 @@ for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(Y[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
+    
+    
 
-X_KF = KalmanFilter(Y)
+start_cpu_time  = time.process_time()
+initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+X_KF            = KalmanFilter(Y)
+
+final_rss       = psutil.Process(os.getpid()).memory_info().rss
+memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+print(f"Memory increase during code block: {memory_increase_mib:.2f} MiB")
+
+end_cpu_time = time.process_time()
+cpu_time_taken = end_cpu_time - start_cpu_time
+print(f"CPU time taken: {cpu_time_taken:.6f} seconds")
+
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_KF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
 
 
-A       = tf.linalg.diag(tf.range(0.05,0.98,0.98/nD, dtype=tf.float64)[:nD])
-X, Y    = SVSSM(nT, nD, A=A)
+
+
+
+
+
+
+
+
+A       = tf.linalg.diag(tf.constant(tf.linspace(0.5,0.95,nD).numpy(), dtype=tf.float64))
+X, Y    = SVSSM(nT, nD, A=A, V=Cx)
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(Y[:,i], linewidth=1, alpha=0.75)
     plt.show() 
-    
-X_EKF = ExtendedKalmanFilter(Y, A=A)
+
+
+start_cpu_time  = time.process_time()
+initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+X_EKF           = ExtendedKalmanFilter(Y, A=A)
+
+final_rss       = psutil.Process(os.getpid()).memory_info().rss
+memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+end_cpu_time = time.process_time()
+cpu_time_taken = end_cpu_time - start_cpu_time
+
+print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
+print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
+
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
+    
 
-X_UKF = UnscentedKalmanFilter(Y, A=A)
+start_cpu_time  = time.process_time()
+initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+X_UKF           = UnscentedKalmanFilter(Y, A=A)
+
+final_rss       = psutil.Process(os.getpid()).memory_info().rss
+memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+end_cpu_time = time.process_time()
+cpu_time_taken = end_cpu_time - start_cpu_time
+
+print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
+print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
+
+
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_UKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
     
-X_PF, ess_PF, weights_PF, particles_PF = ParticleFilter(Y, N=10, A=A)
+    
+    
+start_cpu_time  = time.process_time()
+initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+X_PF, ess_PF, weights_PF, particles_PF = ParticleFilter(Y, N=Np, A=A)
+
+final_rss       = psutil.Process(os.getpid()).memory_info().rss
+memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+end_cpu_time = time.process_time()
+cpu_time_taken = end_cpu_time - start_cpu_time
+
+print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
+print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
+
+    
+    
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_PF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
+
+
 
 X_EDH, ess_EDH, weights_EDH, Jx_EDH, Jw_EDH = EDH(Y, N=10, A=A, stepsize=0.2)
 for i in range(nD):
