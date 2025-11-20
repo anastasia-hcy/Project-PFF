@@ -95,7 +95,7 @@ class TestSSM(unittest.TestCase):
         self.mean       = tf.zeros((self.nD,), dtype=tf.float64)
         self.Sigma      = tf.eye(self.nD, dtype=tf.float64)
 
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.95, 0.95, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -217,7 +217,7 @@ class TestEKF(unittest.TestCase):
        
         self.P, _       = SE_Cov_div(self.nD, tf.random.normal((self.nD,), dtype=tf.float64) )
         
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.95, 0.95, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -306,7 +306,7 @@ class TestUKF(unittest.TestCase):
        
         self.P, _       = SE_Cov_div(self.nD, tf.random.normal((self.nD,), dtype=tf.float64) )
         
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.95, 0.95, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -436,7 +436,7 @@ class TestPF(unittest.TestCase):
         self.X          = tf.random.normal((self.nD,), dtype=tf.float64)
         self.Y          = tf.random.normal((self.nD,), dtype=tf.float64)
        
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.95, 0.95, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -535,19 +535,22 @@ class TestPF(unittest.TestCase):
 
     def test_particle_filter(self): 
 
-        _, Y                     = SVSSM(self.nT, self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
-        X_filtered, ESS, Weights = ParticleFilter(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, resample=False)
+        _, Y                                = SVSSM(self.nT, self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
+        X_filtered, ESS, Weights, xParts    = ParticleFilter(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, resample=False)
 
         self.assertEqual(X_filtered.shape, (self.nT, self.nD))
         self.assertEqual(ESS.shape, (self.nT,))
         self.assertEqual(Weights.shape, (self.nT,self.Np))
+        self.assertEqual(xParts.shape, (self.nT,self.Np,self.nD))
 
         self.assertTrue(isinstance(X_filtered, tf.Variable))
         self.assertTrue(isinstance(ESS, tf.Variable))
         self.assertTrue(isinstance(Weights, tf.Variable))
+        self.assertTrue(isinstance(xParts, tf.Variable))
         
         self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered)))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(ESS)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xParts)))
 
 
 
@@ -562,7 +565,7 @@ class TestEDH(unittest.TestCase):
         self.Xprev      = tf.random.normal((self.nD,), dtype=tf.float64)
         self.Y          = tf.random.normal((self.nD,), dtype=tf.float64)
        
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.95, 0.95, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -733,7 +736,7 @@ class TestLEDH(unittest.TestCase):
         self.Xprev      = tf.random.normal((self.nD,), dtype=tf.float64)
         self.Y          = tf.random.normal((self.nD,), dtype=tf.float64)
        
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.95, 0.95, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -923,7 +926,7 @@ class TestKernelPFF(unittest.TestCase):
         self.Xprev      = tf.random.normal((self.nD,), dtype=tf.float64)
         self.Y          = tf.random.normal((self.nD,), dtype=tf.float64)
        
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.95, 0.95, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))

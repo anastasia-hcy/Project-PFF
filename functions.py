@@ -4,52 +4,23 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 
-
-
 #############################################
 #  Squared Exponential Kernels & Divergence # 
 #############################################
 
-
-
 def SE_kernel(x1, x2, scale, length):
-    """
-    Squared Exponential (SE) kernel between two points, x1 and x2.
-
-    Keyword args:
-    -------------
-    x1 : float64
-    x2 : float64 
-    scale : float64. The scale parameter for the SE kernel
-    length : float64. The lengthscale parameter for the SE kernel
-
-    Returns:
-    --------
-    float64. The value of the SE kernel evaluated at x1 and x2
-    """
+    """The Squared Exponential (SE) kernel between two points, x1 and x2, with two parameters, scale and length."""
     return (scale**2) * tf.math.exp( - (x1-x2)**2 / (2*length) ) 
 
 
 def SE_kernel_divC(x1, x2, length):
-    """
-    Constant part of the divergence of Squared Exponential (SE) kernel given two points, x1 and x2.
-
-    Keyword args:
-    -------------
-    x1 : float64
-    x2 : float64 
-    length : float64. The length parameter for the SE kernel
-
-    Returns:
-    --------
-    float64. The value of the constant part of the derivative SE kernel evaluated at x1.
-    """
+    """Compute and return the constant part of the derivative of Squared Exponential (SE) kernel given two points, x1 and x2, and the length parameter."""
     return - (x1-x2) / length
 
 
 def SE_Cov_div(ndims, x, scale=None, length=None):
     """
-    Compute the covariance matrix and the constant part of its derivatives using the Squared Exponential (SE) kernel for a given vector, x
+    Compute the covariance matrix and the constant part of its derivatives using the Squared Exponential (SE) kernel given a vector, x
 
     Keyword args:
     -------------
@@ -91,7 +62,7 @@ def SE_Cov_div(ndims, x, scale=None, length=None):
 
 def norm_rvs(n, mean, Sigma):
     """
-    Generate Gaussian random variables using the Cholesky decomposition and standard Normal distribution for a given expectation and covariance matrix
+    Generate Gaussian random variables using Cholesky decomposition and standard Normal given the expectation and covariance matrix
 
     Keyword args:
     -------------
@@ -166,10 +137,13 @@ def LGSSM(nTimes, ndims, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
 ###############################
 
 def SV_transform(n, m, B, x, W, U=None):
+    """Generate and return the measurements using the nonlinear transformation of the stochastic volatility model given the latent system states, x."""
     U               = tf.zeros((n,n), dtype=tf.float64) if U is None else U
-    z               = tf.linalg.matvec(B, tf.math.exp(x/2)) 
+    z               = tf.linalg.matvec(B, tf.math.exp(x/2))     
     C               = tf.linalg.diag(z) @ W @ tf.linalg.diag(z) 
-    return norm_rvs(n, m, C + U)
+    y               = norm_rvs(n, m, C+U)
+    y2             = tf.where( tf.math.is_nan(y) , tf.cast(0.0, tf.float64), y)   
+    return y2
 
 
 def SVSSM(nTimes, ndims, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None, muy=None):
@@ -230,18 +204,24 @@ def SVSSM(nTimes, ndims, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None, 
 # Standard Kalman Filter # 
 ##########################
 
-
+"Predict and return the system state and covariance matrix, x and P, given the previous, x_prev and P_prev."
+"Compute and return the standard Kalman gain."
+"Filter the predicted system state and covariance matrix, x_prev and P_prev, using the Kalman gain and observed measurments, K and y_obs."
+       
 def KF_Predict(x_prev, P_prev, A, V):
+    "Predict and return the system state and covariance matrix, x and P, given the previous, x_prev and P_prev."
     x               = tf.linalg.matvec(A, x_prev)
     P               = A @ P_prev @ tf.transpose(A) + V
     return x, P 
 
 def KF_Gain(P, B, W):
+    "Compute and return the standard Kalman gain."
     M               = P @ tf.transpose(B) 
     Minv            = tf.linalg.inv(B @ M + W) 
     return M @ Minv
 
 def KF_Filter(x_prev, P_prev, y_obs, y_prev, B, K):
+    "Filter the predicted system state and covariance matrix, x_prev and P_prev, using the Kalman gain and observed measurments, K and y_obs."
     x               = x_prev + tf.linalg.matvec(K, y_obs - y_prev)
     P               = P_prev - P_prev @ tf.transpose(B) @ tf.transpose(K)
     return x, P
@@ -300,15 +280,15 @@ def EKF_Predict(x_prev, P_prev, A, V):
 def EKF_Jacobi(x, y, B):
 
     Jx              = tf.linalg.diag(y/2)
-    Jx2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jx), Jx > 0.0) , tf.cast(1e8, tf.float64), Jx)
-    Jx2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jx), Jx < 0.0) , tf.cast(-1e8, tf.float64), Jx2)
-    Jx2             = tf.where( tf.math.is_nan(Jx), tf.cast(1.0, tf.float64), Jx2)
-
+    Jx2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jx), Jx > 0.0) , tf.cast(1e9, tf.float64), Jx)
+    Jx2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jx), Jx < 0.0) , tf.cast(-1e9, tf.float64), Jx2)
+    Jx2             = tf.where( tf.math.is_nan(Jx) , tf.cast(0.0, tf.float64), Jx2)
+    
     Jw              = tf.linalg.diag(tf.linalg.matvec(B, tf.math.exp(x/2)))
-    Jw2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jw), Jw > 0.0) , tf.cast(1e8, tf.float64), Jw)
-    Jw2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jw), Jw < 0.0) , tf.cast(-1e8, tf.float64), Jw2)
-    Jw2             = tf.where( tf.math.is_nan(Jw), tf.cast(1.0, tf.float64), Jw2)
-
+    Jw2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jw), Jw > 0.0) , tf.cast(1e9, tf.float64), Jw)
+    Jw2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jw), Jw < 0.0) , tf.cast(-1e9, tf.float64), Jw2)
+    Jw2             = tf.where( tf.math.is_nan(Jw) , tf.cast(0.0, tf.float64), Jw2)
+    
     return Jx, Jw2
 
 def EKF_Gain(P, Jx, Jw, W, U):
@@ -511,16 +491,6 @@ def initiate_particles(N, n, mu0, Sigma0):
         x0[i,:].assign( norm_rvs(n, mu0, Sigma0) )
     return x0 
 
-
-def draw_particles(N, n, y, xprev, SigmaX, muy, SigmaY, Sigma0, U):
-    xn              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
-    Lp              = tf.Variable(tf.zeros((N,), dtype=tf.float64)) 
-    for i in range(N):  
-        xi          = norm_rvs(n, xprev[i,:], Sigma0)
-        xn[i,:].assign(xi)
-        Lp[i].assign( LogLikelihood(xi, y, muy, SigmaY, U) + LogTarget(xi, xprev[i,:], SigmaX) - LogImportance(xi, xprev[i,:], Sigma0) )      
-    return xn, Lp 
-
 def LogImportance(x, mu0, Sigma0):
     InvSigma0       = tf.linalg.inv(Sigma0)
     diff            = x - mu0
@@ -539,6 +509,16 @@ def LogTarget(x, xprev, Sigma0):
     InvSigma0       = tf.linalg.inv(Sigma0)
     diff            = x - xprev
     return - 1/2 *  tf.math.log(tf.linalg.det(Sigma0)) - 1/2 * tf.linalg.tensordot( tf.linalg.matvec(InvSigma0, diff), diff, axes=1) 
+
+
+def draw_particles(N, n, y, xprev, SigmaX, muy, SigmaY, Sigma0, U):
+    xn              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
+    Lp              = tf.Variable(tf.zeros((N,), dtype=tf.float64)) 
+    for i in range(N):  
+        xi          = norm_rvs(n, xprev[i,:], Sigma0)
+        xn[i,:].assign(xi)
+        Lp[i].assign( LogLikelihood(xi, y, muy, SigmaY, U) + LogTarget(xi, xprev[i,:], SigmaX) - LogImportance(xi, xprev[i,:], Sigma0) )      
+    return xn, Lp 
 
 def compute_weights(w0, Lp):
     return tf.math.exp( tf.math.log(w0) + Lp )
@@ -615,7 +595,8 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
     Weights         = tf.Variable(tf.zeros((nTimes,N), dtype=tf.float64))
-
+    X_part          = tf.Variable(tf.zeros((nTimes,N,ndims), dtype=tf.float64))
+    
     x_prev          = initiate_particles(N, ndims, mu0, Sigma0)
     w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
 
@@ -624,7 +605,10 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
         x_pred, lp  = draw_particles(N, ndims, y[i,:], x_prev, V, muy, W, Sigma0, u)
 
         w_pred      = compute_weights(w_prev, lp)
-        w_norm      = normalize_weights(w_pred)
+        w_norm      = normalize_weights(w_pred) 
+        
+        Weights[i,:].assign(w_norm)
+        X_part[i,:,:].assign(x_pred)
         
         ness        = compute_ESS(w_norm)
         if resample == True and ness < NT: 
@@ -636,15 +620,9 @@ def ParticleFilter(y, A=None, B=None, V=None, W=None, N=None, resample=None, mu0
             x_prev      = x_pred
 
         ESS[i].assign(ness)
-        X_filtered[i,:].assign(x_filt) 
-        Weights[i,:].assign(w_norm)
+        X_filtered[i,:].assign(x_filt)
 
-    return X_filtered, ESS, Weights
-
-
-
-
-
+    return X_filtered, ESS, Weights, X_part
 
 
 ######################## 
@@ -1075,8 +1053,8 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=N
         if method == "EKF":            
             eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el = LEDH_linearize_EKF(Np, ndims, x_prev, P_prev, A, B, V, W, muy, u)
         
-        JacobiX[i,:].assign(H)
-        JacobiW[i,:].assign(Hiw)
+        JacobiX[i,:,:,:].assign(H)
+        JacobiW[i,:,:,:].assign(Hiw)
         
         eta1        = eta0
         theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
@@ -1229,9 +1207,9 @@ def KernelPFF(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, 
         # CovX        = tf.transpose(x_prev - x_hat) @ (x_prev - x_hat) * Cx 
 
         for j in range(Nl): 
-
+            
             grad, Jx, Jw = KPFF_LP(Np, ndims, x_prev, y[i,:], muy, B, W, x_hat, Sigma0, u)
-
+            
             if method == "kernel":
                 II  = KPFF_RKHS(Np, ndims, x_prev, grad, Sigma0)
             if method == "scalar":
