@@ -20,6 +20,8 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
+tf.random.set_seed(123)
+
 import math
 pi_constant = tf.constant(math.pi, dtype=tf.float64)
 
@@ -95,7 +97,7 @@ class TestSSM(unittest.TestCase):
         self.mean       = tf.zeros((self.nD,), dtype=tf.float64)
         self.Sigma      = tf.eye(self.nD, dtype=tf.float64)
 
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.99, 0.99, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -132,6 +134,16 @@ class TestSSM(unittest.TestCase):
 
         self.assertTrue(isinstance(X, tf.Variable))
         self.assertTrue(isinstance(Y, tf.Variable))
+
+        nS              = self.nD - 1 
+        XS, YS          = SVSSM(self.nT, self.nD, n_sparse=nS, A=self.A, V=self.V)
+
+        self.assertEqual(XS.shape, (self.nT, self.nD))
+        self.assertEqual(YS.shape, (self.nT, nS))
+
+        self.assertTrue(isinstance(XS, tf.Variable))
+        self.assertTrue(isinstance(YS, tf.Variable))
+
 
 
 class TestKF(unittest.TestCase):
@@ -217,7 +229,7 @@ class TestEKF(unittest.TestCase):
        
         self.P, _       = SE_Cov_div(self.nD, tf.random.normal((self.nD,), dtype=tf.float64) )
         
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.99, 0.99, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -306,7 +318,7 @@ class TestUKF(unittest.TestCase):
        
         self.P, _       = SE_Cov_div(self.nD, tf.random.normal((self.nD,), dtype=tf.float64) )
         
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.99, 0.99, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -436,7 +448,7 @@ class TestPF(unittest.TestCase):
         self.X          = tf.random.normal((self.nD,), dtype=tf.float64)
         self.Y          = tf.random.normal((self.nD,), dtype=tf.float64)
        
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.99, 0.99, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -536,21 +548,24 @@ class TestPF(unittest.TestCase):
     def test_particle_filter(self): 
 
         _, Y                                = SVSSM(self.nT, self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
-        X_filtered, ESS, Weights, xParts    = ParticleFilter(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, resample=False)
+        X_filtered, ESS, Weights, xParts, xParts2    = ParticleFilter(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, resample=False)
 
         self.assertEqual(X_filtered.shape, (self.nT, self.nD))
         self.assertEqual(ESS.shape, (self.nT,))
         self.assertEqual(Weights.shape, (self.nT,self.Np))
         self.assertEqual(xParts.shape, (self.nT,self.Np,self.nD))
+        self.assertEqual(xParts2.shape, (self.nT,self.Np,self.nD))
 
         self.assertTrue(isinstance(X_filtered, tf.Variable))
         self.assertTrue(isinstance(ESS, tf.Variable))
         self.assertTrue(isinstance(Weights, tf.Variable))
         self.assertTrue(isinstance(xParts, tf.Variable))
+        self.assertTrue(isinstance(xParts2, tf.Variable))
         
         self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered)))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(ESS)))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(xParts)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xParts2)))
 
 
 
@@ -565,7 +580,7 @@ class TestEDH(unittest.TestCase):
         self.Xprev      = tf.random.normal((self.nD,), dtype=tf.float64)
         self.Y          = tf.random.normal((self.nD,), dtype=tf.float64)
        
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.99, 0.99, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -682,8 +697,8 @@ class TestEDH(unittest.TestCase):
     def test_edh(self):
         
         _, Y                                    = SVSSM(self.nT, self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
-        X_filtered, ESS, Weights, Jx, Jw        = EDH(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, stepsize=self.epsilon)
-        X_filtered2, ESS2, Weights2, Jx2, Jw2   = EDH(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, stepsize=self.epsilon, method="EKF")
+        X_filtered, ESS, Weights, Jx, Jw        = EDH(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W)
+        X_filtered2, ESS2, Weights2, Jx2, Jw2   = EDH(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, method="EKF")
 
         self.assertEqual(X_filtered.shape, (self.nT,self.nD))
         self.assertEqual(ESS.shape, (self.nT,))
@@ -736,7 +751,7 @@ class TestLEDH(unittest.TestCase):
         self.Xprev      = tf.random.normal((self.nD,), dtype=tf.float64)
         self.Y          = tf.random.normal((self.nD,), dtype=tf.float64)
        
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.99, 0.99, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -871,8 +886,9 @@ class TestLEDH(unittest.TestCase):
     def test_ledh(self):
         
         _, Y                                        = SVSSM(self.nT, self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
-        X_filtered, ESS, Weights, JxC, JwC          = LEDH(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, stepsize=self.epsilon)
-        X_filtered2, ESS2, Weights2, JxC2, JwC2     = LEDH(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, stepsize=self.epsilon, method="EKF")
+        X_filtered, ESS, Weights, JxC, JwC          = LEDH(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W)
+        A2                                          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
+        X_filtered2, ESS2, Weights2, JxC2, JwC2     = LEDH(y=Y, N=self.Np, A=A2, B=self.B, V=self.V, W=self.W, method="EKF")
 
         self.assertEqual(X_filtered.shape, (self.nT,self.nD))
         self.assertEqual(ESS.shape, (self.nT,))
@@ -926,7 +942,7 @@ class TestKernelPFF(unittest.TestCase):
         self.Xprev      = tf.random.normal((self.nD,), dtype=tf.float64)
         self.Y          = tf.random.normal((self.nD,), dtype=tf.float64)
        
-        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.85, 0.85, dtype=tf.float64))
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.99, 0.99, dtype=tf.float64))
         self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
 
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
@@ -938,7 +954,7 @@ class TestKernelPFF(unittest.TestCase):
         self.Sigma0     = (self.V @ self.V) @ tf.linalg.inv(tf.eye(self.nD, dtype=tf.float64) - self.A @ self.A) 
         
         self.epsilon    = 0.1
-        self.Nl         = int(1/self.epsilon)
+        self.Nl         = 30
 
         self.P, _       = SE_Cov_div(self.nD, tf.random.normal((self.nD,), dtype=tf.float64) )
         self.R          = tf.linalg.diag(tf.range(self.nD, dtype=tf.float64) + 1.0)
@@ -960,7 +976,7 @@ class TestKernelPFF(unittest.TestCase):
         
     def test_kpff_lp(self):
         e0              = tf.zeros((self.Np,self.nD), dtype=tf.float64)
-        lp, jxc, jwc    = KPFF_LP(self.Np, self.nD, e0, self.mu0, self.mu0, self.B, self.W, self.mu0, self.Sigma0, self.u)
+        lp, jxc, jwc    = KPFF_LP(self.Np, self.nD, self.nD, e0, self.mu0, self.mu0, self.B, self.W, self.mu0, self.Sigma0, self.u, self.u)
 
         self.assertEqual(lp.shape, (self.Np,self.nD))
         self.assertTrue(isinstance(lp, tf.Variable))
@@ -998,31 +1014,88 @@ class TestKernelPFF(unittest.TestCase):
 
     def test_kernel_pff(self):
         
-        _, Y                    = SVSSM(self.nT, self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
-        X_filtered, JxC, JwC    = KernelPFF(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, stepsize=self.epsilon)
-        X_filtered2, JxC2, JwC2 = KernelPFF(y=Y, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, stepsize=self.epsilon, method="scalar")
+        _, Y                                        = SVSSM(self.nT, self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
+        X_filtered, JxC, JwC, xPart, xPartp         = KernelPFF(y=Y, Nx=self.nD, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W)
+        X_filtered2, JxC2, JwC2, xPart2, xPartp2    = KernelPFF(y=Y, Nx=self.nD, N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, method="scalar")
 
         self.assertEqual(X_filtered.shape, (self.nT,self.nD))
         self.assertEqual(JxC.shape, (self.nT, self.Nl, self.Np, self.nD, self.nD))
         self.assertEqual(JwC.shape, (self.nT,self.Nl,self.Np, self.nD, self.nD))
+        self.assertEqual(xPart.shape, (self.nT,self.Np, self.nD))
+        self.assertEqual(xPartp.shape, (self.nT,self.Np, self.nD))
         
         self.assertEqual(X_filtered2.shape, (self.nT,self.nD))
         self.assertEqual(JxC2.shape, (self.nT,self.Nl,self.Np, self.nD, self.nD))
         self.assertEqual(JwC2.shape, (self.nT,self.Nl,self.Np, self.nD, self.nD))
-
+        self.assertEqual(xPart2.shape, (self.nT,self.Np, self.nD))
+        self.assertEqual(xPartp2.shape, (self.nT,self.Np, self.nD))
+       
         self.assertTrue(isinstance(X_filtered, tf.Variable))
         self.assertTrue(isinstance(JxC, tf.Variable))
         self.assertTrue(isinstance(JwC, tf.Variable))
+        self.assertTrue(isinstance(xPart, tf.Variable))
+        self.assertTrue(isinstance(xPartp, tf.Variable))
+        
         self.assertTrue(isinstance(X_filtered2, tf.Variable)) 
         self.assertTrue(isinstance(JxC2, tf.Variable))
         self.assertTrue(isinstance(JwC2, tf.Variable))
+        self.assertTrue(isinstance(xPart2, tf.Variable))
+        self.assertTrue(isinstance(xPartp2, tf.Variable))
         
         self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered)))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(JxC)))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(JwC)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xPart)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xPartp)))
+        
         self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered2)))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(JxC2)))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(JwC2)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xPart2)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xPartp2)))
+
+    def test_kernel_pff_sparse(self):
+        
+        nS                                          = self.nD - 1
+        _, Y                                        = SVSSM(self.nT, self.nD, n_sparse=nS, A=self.A, V=self.V)
+        X_filtered, JxC, JwC, xPart, xPartp         = KernelPFF(y=Y, Nx=self.nD, N=self.Np, A=self.A, V=self.V)
+        X_filtered2, JxC2, JwC2, xPart2, xPartp2    = KernelPFF(y=Y, Nx=self.nD, N=self.Np, A=self.A, V=self.V, method="scalar")
+
+        self.assertEqual(X_filtered.shape, (self.nT,self.nD))
+        self.assertEqual(JxC.shape, (self.nT, self.Nl, self.Np, nS, self.nD))
+        self.assertEqual(JwC.shape, (self.nT,self.Nl,self.Np, nS, nS))
+        self.assertEqual(xPart.shape, (self.nT,self.Np, self.nD))
+        self.assertEqual(xPartp.shape, (self.nT,self.Np, self.nD))
+        
+        self.assertEqual(X_filtered2.shape, (self.nT,self.nD))
+        self.assertEqual(JxC2.shape, (self.nT,self.Nl,self.Np, nS, self.nD))
+        self.assertEqual(JwC2.shape, (self.nT,self.Nl,self.Np, nS, nS))
+        self.assertEqual(xPart2.shape, (self.nT,self.Np, self.nD))
+        self.assertEqual(xPartp2.shape, (self.nT,self.Np, self.nD))
+       
+        self.assertTrue(isinstance(X_filtered, tf.Variable))
+        self.assertTrue(isinstance(JxC, tf.Variable))
+        self.assertTrue(isinstance(JwC, tf.Variable))
+        self.assertTrue(isinstance(xPart, tf.Variable))
+        self.assertTrue(isinstance(xPartp, tf.Variable))
+        
+        self.assertTrue(isinstance(X_filtered2, tf.Variable)) 
+        self.assertTrue(isinstance(JxC2, tf.Variable))
+        self.assertTrue(isinstance(JwC2, tf.Variable))
+        self.assertTrue(isinstance(xPart2, tf.Variable))
+        self.assertTrue(isinstance(xPartp2, tf.Variable))
+        
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(JxC)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(JwC)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xPart)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xPartp)))
+        
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered2)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(JxC2)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(JwC2)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xPart2)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xPartp2)))
 
         
 if __name__ == '__main__':
