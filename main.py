@@ -2,13 +2,9 @@
 # Set directory #
 #################
 
-# path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
-# pathdat             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/data/"
-# pathfig             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/plots/"
-
-path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts/"
-pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/data/"
-pathfig             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/plots/"
+path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
+pathdat             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/data/"
+pathfig             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/plots/"
 
 import os, sys
 os.chdir(path)
@@ -111,13 +107,10 @@ for i in range(nD):
 """
 Generate data from stochastic volatility model
 """
-from functions import  SVSSM
+# from functions import  SVSSM
 
 A               = tf.linalg.diag(tf.constant(tf.linspace(0.5, 0.80, nD).numpy(), dtype=tf.float64))
 # X, Y            = SVSSM(nT, nD, A=A, V=Cx)
-
-# with open(pathdat+"dataSV.pkl", "wb") as file:
-#     pkl.dump({"States": X, "Obs": Y, "Cov": Cx}, file)
     
 with open(pathdat+"dataSV.pkl", 'rb') as file:
     dataSV = pkl.load(file)    
@@ -365,87 +358,48 @@ for i in range(nD):
 """
 KPFF
 """
-from functions import KernelPFF
+import numpy as np
+from functions import SE_Cov_div, SVSSM, KernelPFF
 
+nD              = 10
 nT              = 80
 Ny              = nD - 2
 
-B_sparse        = tf.random.normal((Ny, nD), dtype=tf.float64) 
-X_sparse, Y_sparse = SVSSM(nT, nD, n_sparse=Ny, A=A, B=B_sparse, V=Cx)
+unobserved      = [3,7]
+observed        = [0,1,2,4,5,6,8,9]
 
-Np              = 20
-
-with open(pathdat+"dataSV_sparse.pkl", "wb") as file:
-    pkl.dump({"States": X_sparse, "Obs": Y_sparse, "B": B_sparse}, file)
+# A_sparse        = tf.linalg.diag(tf.constant(tf.linspace(0.5, 0.80, nD).numpy(), dtype=tf.float64))
+# B_sparse        = tf.Variable(tf.zeros((Ny,nD), dtype=tf.float64))
+# for i,j in zip(range(Ny),observed):
+#     B_sparse[i,j].assign(1.0)
     
+# Cx_sparse, DivCx_sparse = SE_Cov_div(nD, tf.random.normal((nD,), dtype=tf.float64))
+# X_sparse, Y_sparse = SVSSM(nT, nD, n_sparse=Ny, A=A_sparse, B=B_sparse, V=Cx_sparse)
+
 with open(pathdat+"dataSV_sparse.pkl", 'rb') as file:
     dataSV_sparse = pkl.load(file)    
 X_sparse        = dataSV_sparse['States']
 Y_sparse        = dataSV_sparse['Obs']
+A_sparse        = dataSV_sparse['A']
 B_sparse        = dataSV_sparse['B']
+Cx_sparse       = dataSV_sparse['Cx']
 
-for i in range(nD):
+for i,j in zip(observed,range(Ny)):
     plt.plot(X_sparse[:,i], linewidth=1, alpha=0.75) 
-    plt.show() 
-for i in range(Ny):
-    plt.plot(Y[:,i], linewidth=1, alpha=0.75)
+    plt.plot(Y_sparse[:,j], linewidth=1, alpha=0.75)
     plt.show()
 
+Np              = 20
+Nl              = 30
 
 """
 KPFF - scalar
 """
 
-start_cpu_time  = time.process_time()
-initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-X_KPFF2, Jx_KPFF2, Jw_KPFF2, particles_KPFF2, particles2_KPFF2 = KernelPFF(Y[:1,:], Nx=nD, A=A, N=Np, method="scalar")
-
-final_rss       = psutil.Process(os.getpid()).memory_info().rss
-memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
-
-end_cpu_time    = time.process_time()
-cpu_time_taken  = end_cpu_time - start_cpu_time
-
-print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
-print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
-
-
-with open(pathdat+"res_KPFF2.pkl", "wb") as file:
-    pkl.dump({"res": X_KPFF2, 
-              "Jx": Jx_KPFF2,
-              "Jw": Jw_KPFF2,
-              "particles": particles_KPFF2,
-              "particles2": particles2_KPFF2,
-              "cpu": [cpu_time_taken, memory_increase_mib]}, file)
-
-
-with open(pathdat+"res_KPFF2.pkl", 'rb') as file:
-    res_KPFF2 = pkl.load(file)
-    
-X_KPFF2          = res_KPFF2['res']
-Jx_KPFF2         = res_KPFF2['Jx']
-Jw_KPFF2         = res_KPFF2['Jw']
-particles_KPFF2  = res_KPFF2['particles']
-particles2_KPFF2 = res_KPFF2['particles2']
-
-
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_KPFF2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.show() 
-    
-
-"""
-KPFF - kernel
-"""
-
 # start_cpu_time  = time.process_time()
 # initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-    
-# X_KPFF, Jx_KPFF, Jw_KPFF, particles_KPFF, particles2_KPFF = KernelPFF(Y[:1,:], A=A, N=30)
-
+# X_KPFF2, Jx_KPFF2, Jw_KPFF2, particles_KPFF2, particles2_KPFF2 = KernelPFF(Y_sparse, Nx=nD, A=A_sparse, B=B_sparse, N=Np, method="scalar")
 
 # final_rss       = psutil.Process(os.getpid()).memory_info().rss
 # memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
@@ -457,7 +411,53 @@ KPFF - kernel
 # print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
 
 
-# with open(pathdat+"res_KPFF.pkl", "wb") as file:
+# with open(pathdat+"res_KPFF2_sparse.pkl", "wb") as file:
+#     pkl.dump({"res": X_KPFF2, 
+#               "Jx": Jx_KPFF2,
+#               "Jw": Jw_KPFF2,
+#               "particles": particles_KPFF2,
+#               "particles2": particles2_KPFF2,
+#               "cpu": [cpu_time_taken, memory_increase_mib]}, file)
+
+
+with open(pathdat+"res_KPFF2_sparse.pkl", 'rb') as file:
+    res_KPFF2 = pkl.load(file)
+    
+X_KPFF2          = res_KPFF2['res']
+Jx_KPFF2         = res_KPFF2['Jx']
+Jw_KPFF2         = res_KPFF2['Jw']
+particles_KPFF2  = res_KPFF2['particles']
+particles2_KPFF2 = res_KPFF2['particles2']
+
+
+for i in range(nD):
+    plt.plot(X_sparse[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_KPFF2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+    
+
+
+
+"""
+KPFF - kernel
+"""
+
+# start_cpu_time  = time.process_time()
+# initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+    
+# X_KPFF, Jx_KPFF, Jw_KPFF, particles_KPFF, particles2_KPFF = KernelPFF(Y_sparse, Nx=nD, A=A_sparse, B=B_sparse, N=Np)
+
+# final_rss       = psutil.Process(os.getpid()).memory_info().rss
+# memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+# end_cpu_time    = time.process_time()
+# cpu_time_taken  = end_cpu_time - start_cpu_time
+
+# print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
+# print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
+
+
+# with open(pathdat+"res_KPFF_sparse.pkl", "wb") as file:
 #     pkl.dump({"res": X_KPFF, 
 #               "Jx": Jx_KPFF,
 #               "Jw": Jw_KPFF,
@@ -466,7 +466,7 @@ KPFF - kernel
 #               "cpu": [cpu_time_taken, memory_increase_mib]}, file)
 
 
-with open(pathdat+"res_KPFF.pkl", 'rb') as file:
+with open(pathdat+"res_KPFF_sparse.pkl", 'rb') as file:
     res_KPFF = pkl.load(file)
     
 X_KPFF          = res_KPFF['res']
@@ -475,17 +475,12 @@ Jw_KPFF         = res_KPFF['Jw']
 particles_KPFF  = res_KPFF['particles']
 particles2_KPFF = res_KPFF['particles2']
 
-for i in range(nD):
-    plt.plot(X[:50,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_KPFF[:50,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+for i in unobserved:
+    plt.plot(X_sparse[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_KPFF2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.plot(X_KPFF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
 
-
-plt.scatter(particles_KPFF[40,:,0], particles_KPFF[40,:,0])
-plt.show()
-plt.scatter(particles2_KPFF[39,:,0], particles2_KPFF[40,:,0])
-plt.show()
-     
  
 
 #############################
@@ -529,17 +524,30 @@ def conditioning(J):
 #     for j in range(Np):
 #         JwConds_LEDH[i,j] = conditioning(Jw_LEDH[i,j,:,:])
 
-# JxConds_KPFF2 = np.zeros((nT,Nl,Np))  
-# for i in range(nT):
-#     for j in range(Nl): 
-#         for k in range(Np): 
-#             JxConds_KPFF2[i,j,k] = conditioning(Jx_KPFF2[i,j,k,:,:])
 
-# JwConds_KPFF2 = np.zeros((nT,Nl,Np))  
-# for i in range(nT):
-#     for j in range(Nl): 
-#         for k in range(Np): 
-#             JwConds_KPFF2[i,j,k] = conditioning(Jw_KPFF2[i,j,k,:,:])
+JxConds_KPFF_sparse = np.zeros((nT,Nl,Np))  
+for i in range(nT):
+    for j in range(Nl): 
+        for k in range(Np): 
+            JxConds_KPFF_sparse[i,j,k] = conditioning(Jx_KPFF[i,j,k,:,:])
+
+JwConds_KPFF_sparse = np.zeros((nT,Nl,Np))  
+for i in range(nT):
+    for j in range(Nl): 
+        for k in range(Np): 
+            JwConds_KPFF_sparse[i,j,k] = conditioning(Jw_KPFF[i,j,k,:,:])
+            
+JxConds_KPFF2_sparse = np.zeros((nT,Nl,Np))  
+for i in range(nT):
+    for j in range(Nl): 
+        for k in range(Np): 
+            JxConds_KPFF2_sparse[i,j,k] = conditioning(Jx_KPFF2[i,j,k,:,:])
+
+JwConds_KPFF2_sparse = np.zeros((nT,Nl,Np))  
+for i in range(nT):
+    for j in range(Nl): 
+        for k in range(Np): 
+            JwConds_KPFF2_sparse[i,j,k] = conditioning(Jw_KPFF2[i,j,k,:,:])
 
 # with open(pathdat+"J_conds.pkl", "wb") as file:
 #     pkl.dump({"Jx_EDH_EKF": JxConds_EDH_EKF, 
@@ -548,6 +556,8 @@ def conditioning(J):
 #               "Jw_LEDH_EKF": JwConds_LEDH_EKF,
 #               "Jw_EDH": JwConds_EDH, 
 #               "Jw_LEDH": JwConds_LEDH,
+#               "Jx_KPFF2_sparse": JxConds_KPFF2_sparse,
+#               "Jw_KPFF2_sparse": JwConds_KPFF2_sparse
 #               "Jx_KPFF2": JxConds_KPFF2,
 #               "Jw_KPFF2": JwConds_KPFF2}, file)
 
@@ -556,12 +566,21 @@ with open(pathdat+"J_conds.pkl", 'rb') as file:
 
 JxConds_EDH_EKF     = J_Conds["Jx_EDH_EKF"]
 JwConds_EDH_EKF     = J_Conds["Jw_EDH_EKF"]
+
 JxConds_LEDH_EKF    = J_Conds["Jx_LEDH_EKF"]
 JwConds_LEDH_EKF    = J_Conds["Jw_LEDH_EKF"]
+
 JwConds_EDH         = J_Conds["Jw_EDH"]
 JwConds_LEDH        = J_Conds["Jw_LEDH"]
+
+JxConds_KPFF_sparse = J_Conds["Jx_KPFF_sparse"]
+JwConds_KPFF_sparse = J_Conds["Jw_KPFF_sparse"]
+
 JxConds_KPFF2       = J_Conds["Jx_KPFF2"]
 JwConds_KPFF2       = J_Conds["Jw_KPFF2"]
+
+JxConds_KPFF2_sparse = J_Conds["Jx_KPFF2_sparse"]
+JwConds_KPFF2_sparse = J_Conds["Jw_KPFF2_sparse"]
 
 fig, ax = plt.subplots(figsize=(12,4))
 ax.plot(np.repeat(1,10), np.arange(10), alpha=0.75, color=colors[0])
