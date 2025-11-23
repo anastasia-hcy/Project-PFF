@@ -3,8 +3,8 @@
 #################
 
 path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
-pathdat             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/data/"
-pathfig             = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/plots/"
+pathdat             = "C:/Users/anastasia/MyProjects/JPMorgan/data/"
+pathfig             = "C:/Users/anastasia/MyProjects/JPMorgan/Docs/"
 
 import os, sys
 os.chdir(path)
@@ -31,10 +31,6 @@ import psutil
 import time
 import pickle as pkl 
 
-################################
-# Functions for writing report #
-################################
-
 def get_current_process_ram_usage():
     process = psutil.Process(os.getpid())
     memory_info = process.memory_info()
@@ -45,69 +41,44 @@ def get_current_process_ram_usage():
 
 get_current_process_ram_usage()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ######################## 
 # Question 1 - Warm up #
 ########################
 
-
-"""
-Dimension of toy data
-"""
-# from functions import SE_Cov_div
 nT              = 100
 nD              = 4
-# Cx, DivCx       = SE_Cov_div(nD, tf.random.normal((nD,), dtype=tf.float64))
-
-"""
-Number of particles and steps 
-"""
 Np              = 100
 Nl              = 30
 
 
-"""
-Generate data from linear Gaussian state space model
-"""
-from functions import LGSSM 
-
-X, Y            = LGSSM(nT,nD)
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(Y[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.show() 
 
 
 """
-Standard Kalman Filter
+Data from linear Gaussian state space model
 """
-from functions import KalmanFilter 
+from functions import LGSSM
 
-start_cpu_time  = time.process_time()
-initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-X_KF            = KalmanFilter(Y)
-
-final_rss       = psutil.Process(os.getpid()).memory_info().rss
-memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
-
-end_cpu_time    = time.process_time()
-cpu_time_taken  = end_cpu_time - start_cpu_time
-
-print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
-print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
-
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_KF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.show() 
-
-
-
+X1, Y1          = LGSSM(nT,nD)
 
 """
-Generate data from stochastic volatility model
+Data from stochastic volatility model
 """
-# from functions import  SVSSM
+# from functions import SVSSM
+# from functions import SE_Cov_div
 
 A               = tf.linalg.diag(tf.constant(tf.linspace(0.5, 0.80, nD).numpy(), dtype=tf.float64))
 # X, Y            = SVSSM(nT, nD, A=A, V=Cx)
@@ -118,10 +89,38 @@ X               = dataSV['States']
 Y               = dataSV['Obs']
 Cx              = dataSV['Cov']
 
+
+
+fig, ax = plt.subplots(1,2, figsize=(12,4))
 for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(Y[:,i], linewidth=1, alpha=0.75)
-    plt.show() 
+    ax[0].plot(X1[:,i], linewidth=1, alpha=0.5, color="green") 
+    ax[0].plot(Y1[:,i], linewidth=1, alpha=0.5, color="orange", linestyle='dashed') 
+for i in range(nD):
+    ax[1].plot(X[:,i], linewidth=1, alpha=0.5, color="green") 
+    ax[1].plot(Y[:,i], linewidth=1, alpha=0.5, color="orange", linestyle='dashed') 
+plt.tight_layout()
+plt.show()
+
+
+
+"""
+Standard Kalman Filter
+"""
+from functions import KalmanFilter 
+
+start_cpu_time  = time.process_time()
+initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+X_KF            = KalmanFilter(Y1)
+
+final_rss       = psutil.Process(os.getpid()).memory_info().rss
+memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+end_cpu_time    = time.process_time()
+cpu_time_taken  = end_cpu_time - start_cpu_time
+
+print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
+print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
 
 
 """
@@ -193,7 +192,27 @@ for i in range(nD):
     plt.plot(X_UKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
     
-    
+
+
+
+
+fig, ax = plt.subplots(figsize=(6,4))
+for i in range(nD):
+    ax.plot(X1[:,i], linewidth=1, alpha=0.5, color="green") 
+    ax.plot(X_KF[:,i], linewidth=1, alpha=0.5, color="red", linestyle='dashed') 
+plt.tight_layout()
+plt.savefig(pathfig+"KF.png")
+
+fig, ax = plt.subplots(1,2, figsize=(12,4))
+for i in range(nD):
+    ax[0].plot(X[:,i], linewidth=1, alpha=0.5, color="green") 
+    ax[0].plot(X_EKF[:,i], linewidth=1, alpha=0.5, color="red", linestyle='dashed') 
+for i in range(nD):
+    ax[1].plot(X[:,i], linewidth=1, alpha=0.5, color="green") 
+    ax[1].plot(X_UKF[:,i], linewidth=1, alpha=0.5, color="red", linestyle='dashed') 
+plt.tight_layout()
+plt.savefig(pathfig+"KF_all.png")
+
 
 
 """
@@ -233,10 +252,51 @@ weights_PF      = res_PF['weights']
 particles_PF    = res_PF['particles']
 particles2_PF    = res_PF['particles2']
 
+
+
+from scipy.stats import multivariate_normal
+import numpy as np 
+
+i = 20
+
+a1 = np.linspace(-6, 3, 100)
+a2 = np.linspace(-5.5, 6, 100)
+bx, by = np.meshgrid(a1,a2)
+pos = np.dstack((bx, by))
+rv = multivariate_normal([X[i-1,0],X[i-1,1]], Cx[0:2,0:2])
+bz = rv.pdf(pos)
+
+fig, ax = plt.subplots(1,2, figsize=(12,4))
 for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_PF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.show() 
+    ax[0].plot(X[:,i], linewidth=1, alpha=0.5, color="green") 
+    ax[0].plot(X_PF[:,i], linewidth=1, alpha=0.5, color="red", linestyle='dashed') 
+ax[1].contour(bx,by,bz,levels=10, alpha=0.5)
+ax[1].scatter(particles_PF[i,:,0], particles_PF[i,:,1], color='black',alpha=0.5)
+ax[1].scatter(particles2_PF[i,:,0], particles2_PF[i,:,1], color='red')
+plt.tight_layout()
+plt.savefig(pathfig+"PF.png")
+plt.show()
+
+
+
+
+fig, ax = plt.subplots(figsize=(6,4))
+
+ax.plot(tf.reduce_mean((X - X_UKF)**2, axis=1), linewidth=1, alpha=0.5, color="green") 
+ax.plot(tf.reduce_mean((X - X_PF)**2, axis=1), linewidth=1, alpha=0.5, color="red") 
+plt.tight_layout()
+plt.savefig(pathfig+"PF2.png")
+
+
+
+
+
+
+
+
+
+
+
 
 
 ##############
@@ -354,6 +414,38 @@ for i in range(nD):
     plt.plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.plot(X_LEDH_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
+    
+    
+    
+    
+    
+    
+    
+    
+
+fig, ax = plt.subplots(1,2, figsize=(12,4))
+
+ax[0].plot(tf.reduce_mean((X - X_EDH_EKF)**2, axis=1), linewidth=1, alpha=0.5, color="green") 
+ax[0].plot(tf.reduce_mean((X - X_LEDH_EKF)**2, axis=1), linewidth=1, alpha=0.5, color="red") 
+
+    
+ax[1].plot(tf.reduce_mean((X - X_EDH)**2, axis=1), linewidth=1, alpha=0.5, color="green") 
+ax[1].plot(tf.reduce_mean((X - X_LEDH)**2, axis=1), linewidth=1, alpha=0.5, color="red") 
+
+plt.tight_layout()
+plt.savefig(pathfig+"EDH.png")
+
+plt.show()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
 """
 KPFF
@@ -482,6 +574,25 @@ for i in unobserved:
     plt.show() 
 
  
+ 
+ 
+plt.scatter(particles_KPFF2[10,:,3],  particles_KPFF2[10,:,4])
+plt.scatter(particles2_KPFF2[10,:,3],  particles2_KPFF2[10,:,4])
+plt.show() 
+ 
+ 
+plt.scatter(particles_KPFF[10,:,7],  particles_KPFF[10,:,8])
+plt.scatter(particles2_KPFF[10,:,7],  particles2_KPFF[10,:,8])
+plt.show() 
+ 
+   
+
+ 
+ 
+ 
+ 
+ 
+ 
 
 #############################
 # Plots, figures and tables # 
@@ -497,57 +608,55 @@ def conditioning(J):
     norminv     = tf.norm(Jinv, ord=2)
     return norm * norminv
 
-# JxConds_EDH_EKF = np.zeros((nT,))
-# for i in range(nT): 
-#     JxConds_EDH_EKF[i] = conditioning(Jx_EDH[i,:,:])
-
-# JwConds_EDH_EKF = np.zeros((nT,))
-# for i in range(nT): 
-#     JwConds_EDH_EKF[i] = conditioning(Jw_EDH[i,:,:])
-
-# JxConds_LEDH_EKF = np.zeros((nT,Np))
-# for i in range(nT): 
-#     for j in range(Np):
-#         JxConds_LEDH_EKF[i,j] = conditioning(Jx_LEDH[i,j,:,:])
-
-# JwConds_LEDH_EKF = np.zeros((nT,Np))
-# for i in range(nT): 
-#     for j in range(Np):
-#         JwConds_LEDH_EKF[i,j] = conditioning(Jw_LEDH[i,j,:,:])
-
-# JwConds_EDH = np.zeros((nT,))
-# for i in range(nT): 
-#     JwConds_EDH[i] = conditioning(Jw_EDH[i,:,:])
-
-# JwConds_LEDH = np.zeros((nT,Np))
-# for i in range(nT): 
-#     for j in range(Np):
-#         JwConds_LEDH[i,j] = conditioning(Jw_LEDH[i,j,:,:])
-
+def conditioning_asym(J):
+    """Compute the conditioning number of a given assymetric Jacobian matrix using the eigenvalues"""
+    _, s, _ = np.linalg.svd( J )
+    return np.max(s) / np.min(s)
 
 JxConds_KPFF_sparse = np.zeros((nT,Nl,Np))  
 for i in range(nT):
     for j in range(Nl): 
         for k in range(Np): 
-            JxConds_KPFF_sparse[i,j,k] = conditioning(Jx_KPFF[i,j,k,:,:])
+            JxConds_KPFF_sparse[i,j,k] = conditioning_asym(Jx_KPFF[i,j,k,:,:])
 
 JwConds_KPFF_sparse = np.zeros((nT,Nl,Np))  
 for i in range(nT):
     for j in range(Nl): 
         for k in range(Np): 
-            JwConds_KPFF_sparse[i,j,k] = conditioning(Jw_KPFF[i,j,k,:,:])
+            JwConds_KPFF_sparse[i,j,k] = conditioning_asym(Jw_KPFF[i,j,k,:,:])
             
 JxConds_KPFF2_sparse = np.zeros((nT,Nl,Np))  
 for i in range(nT):
     for j in range(Nl): 
         for k in range(Np): 
-            JxConds_KPFF2_sparse[i,j,k] = conditioning(Jx_KPFF2[i,j,k,:,:])
+            JxConds_KPFF2_sparse[i,j,k] = conditioning_asym(Jx_KPFF2[i,j,k,:,:])
 
 JwConds_KPFF2_sparse = np.zeros((nT,Nl,Np))  
 for i in range(nT):
     for j in range(Nl): 
         for k in range(Np): 
-            JwConds_KPFF2_sparse[i,j,k] = conditioning(Jw_KPFF2[i,j,k,:,:])
+            JwConds_KPFF2_sparse[i,j,k] = conditioning_asym(Jw_KPFF2[i,j,k,:,:])
+
+
+JxConds_KPFF_sparse2 = tf.where( tf.math.logical_and(tf.math.is_inf(JxConds_KPFF_sparse), JxConds_KPFF_sparse > 0.0) , tf.cast(1e9, tf.float64), JxConds_KPFF_sparse)
+JxConds_KPFF2_sparse2 = tf.where( tf.math.logical_and(tf.math.is_inf(JxConds_KPFF2_sparse), JxConds_KPFF2_sparse > 0.0) , tf.cast(1e9, tf.float64), JxConds_KPFF2_sparse)
+
+
+fig, ax = plt.subplots(1,2, figsize=(12,4))
+
+ax[0].plot(tf.reduce_mean(JxConds_KPFF_sparse2, axis=(1,2)), linewidth=1, alpha=0.5, color="green") 
+ax[0].plot(tf.reduce_mean(JxConds_KPFF2_sparse2, axis=(1,2)), linewidth=1, alpha=0.5, color="red") 
+
+    
+ax[1].plot(tf.reduce_mean(JwConds_KPFF_sparse, axis=(1,2)), linewidth=1, alpha=0.5, color="green") 
+ax[1].plot(tf.reduce_mean(JwConds_KPFF2_sparse, axis=(1,2)), linewidth=1, alpha=0.5, color="red") 
+
+plt.tight_layout()
+plt.savefig(pathfig+"KPFF_J.png")
+
+plt.show()
+
+
 
 # with open(pathdat+"J_conds.pkl", "wb") as file:
 #     pkl.dump({"Jx_EDH_EKF": JxConds_EDH_EKF, 
@@ -581,6 +690,37 @@ JwConds_KPFF2       = J_Conds["Jw_KPFF2"]
 
 JxConds_KPFF2_sparse = J_Conds["Jx_KPFF2_sparse"]
 JwConds_KPFF2_sparse = J_Conds["Jw_KPFF2_sparse"]
+
+    
+
+fig, ax = plt.subplots(1,2, figsize=(12,4))
+
+ax[0].plot(JxConds_EDH_EKF, linewidth=1, alpha=0.5, color="green") 
+ax[0].plot(tf.reduce_mean(JxConds_LEDH_EKF, axis=1), linewidth=1, alpha=0.5, color="red") 
+
+    
+ax[1].plot(JwConds_EDH_EKF, linewidth=1, alpha=0.5, color="green") 
+ax[1].plot(tf.reduce_mean(JwConds_LEDH_EKF, axis=1),  linewidth=1, alpha=0.5, color="red") 
+
+plt.tight_layout()
+plt.savefig(pathfig+"EDH_J_EKF.png")
+
+plt.show()
+
+
+fig, ax = plt.subplots(figsize=(6,4))
+
+ax.plot(JwConds_EDH, linewidth=1, alpha=0.5, color="green") 
+ax.plot(tf.reduce_mean(JwConds_LEDH, axis=1), linewidth=1, alpha=0.5, color="red") 
+
+    
+plt.tight_layout()
+plt.savefig(pathfig+"EDH_J_UKF.png")
+
+plt.show()
+
+
+
 
 fig, ax = plt.subplots(figsize=(12,4))
 ax.plot(np.repeat(1,10), np.arange(10), alpha=0.75, color=colors[0])
