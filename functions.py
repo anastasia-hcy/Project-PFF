@@ -463,7 +463,6 @@ def UnscentedKalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=No
 
         Xprev_sp    = SigmaPoints(ndims, x_prev, P_prev, L)
         X_sp        = Xprev_sp @ tf.transpose(A) 
-        print(X_sp)
 
         x_pred      = UKF_Predict_mean(weight0_m, weighti, X_sp) 
         P_pred      = UKF_Predict_cov(ndims, weight0_c, weighti, X_sp, x_pred, u, Cov=V)  
@@ -473,7 +472,6 @@ def UnscentedKalmanFilter(y, A=None, B=None, V=None, W=None, mu0=None, Sigma0=No
         
         Xpred_sp    = SigmaPoints(ndims*2, x_pred0, P_pred0, L)
         Y_sp        = tf.math.exp(Xpred_sp[:,:ndims]/2) @ tf.transpose(B) * Xpred_sp[:,ndims:]
-        print(Y_sp)
         
         y_pred      = UKF_Predict_mean(weight0_m, weighti, Y_sp)
         W_pred      = UKF_Predict_cov(ndims, weight0_c, weighti, Y_sp, y_pred, u)
@@ -694,16 +692,7 @@ def EDH_linearize_UKF(N, n, xprev, xhat, Pprev, A, V, wm, wc, wi, L, U):
 
 
 def EDH_flow_dynamics(N, n, Lamb, epsilon, I, e, e0, P, H, R, er, y, U):
-    """
-    Compute and return the flow dynamics of the pseudo particles.
-    
-    Keyword args:
-    -------------
-    N :
-
-    Returns:
-    --------
-    """
+    """Compute and return the flow dynamics of the pseudo particles for migration."""
     Ai              = Li17eq10(Lamb, H, P, R, U)
     bi              = Li17eq11(I, Lamb, Ai, H, P, R, y, er, e, U)
     move0           = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
@@ -713,6 +702,7 @@ def EDH_flow_dynamics(N, n, Lamb, epsilon, I, e, e0, P, H, R, er, y, U):
     return move0, move
 
 def EDH_flow_lp(N, eta0, eta1, xprev, y, SigmaX, muy, SigmaY, U):
+    """Compute and return the log posterior of the migrated pseudo particles."""
     Lp              = tf.Variable(tf.zeros((N,), dtype=tf.float64)) 
     for i in range(N):  
         Lp[i].assign( LogLikelihood(eta1[i,:], y, muy, SigmaY, U) + LogTarget(eta1[i,:], xprev[i,:], SigmaX) - LogImportance(eta0[i,:], xprev[i,:], SigmaX) )  
@@ -743,6 +733,8 @@ def EDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=No
     X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the EDH.
     ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes before resampling. 
     Weights : tf.Variable of float64 with dimension (nTimes,N). The weights of the particles before resampling. 
+    JacobiX : tf.Variable of float64 with dimension (nTimes,ndims,ndims). The pseudo Jacobian matrix with respect to the state. 
+    JacobiW : tf.Variable of float64 with dimension (nTimes,ndims,ndims). The pseudo Jacobian matrix with respect to the noise. 
     """
     
     nTimes, ndims   = y.shape 
@@ -982,6 +974,7 @@ def LEDH_update_UKF(N, n, m0, P0, y, yhat, Hw, Xsp, Ysp, wc, wi, U):
     return P
 
 def LEDH_flow_dynamics(N, n, Lamb, epsilon, I, eta, eta0, Pi, Hi, Ri, err, y, U):
+    """Compute and return the flow dynamics of the pseudo particles for migration."""
     
     move0           = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
     move            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
@@ -999,6 +992,7 @@ def LEDH_flow_dynamics(N, n, Lamb, epsilon, I, eta, eta0, Pi, Hi, Ri, err, y, U)
     return move0, move, prod
 
 def LEDH_flow_lp(N, eta0, theta, eta1, xprev, y, SigmaX, muy, SigmaY, U):
+    """Compute and return the log posterior of the migrated pseudo particles."""
     Lp              = tf.Variable(tf.zeros((N,), dtype=tf.float64)) 
     for i in range(N):  
         Lp[i].assign( tf.math.log(theta[i]) + LogLikelihood(eta1[i,:], y, muy, SigmaY, U) + LogTarget(eta1[i,:], xprev[i,:], SigmaX[i,:,:]) - LogImportance(eta0[i,:], xprev[i,:], SigmaX[i,:,:]) )  
@@ -1026,6 +1020,9 @@ def LEDH(y, A=None, B=None, V=None, W=None, N=None, mu0=None, Sigma0=None, muy=N
     --------
     X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the LEDH. 
     ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes. 
+    Weights : tf.Variable of float64 with dmension (nTimes,N). The weights of particles. 
+    JacobiX : tf.Variable of float64 with dimension (nTimes,N,ndims,ndims). The pseudo Jacobian matrix with respect to the state. 
+    JacobiW : tf.Variable of float64 with dimension (nTimes,N,ndims,ndims). The pseudo Jacobian matrix with respect to the noise. 
     """
     
     nTimes, ndims   = y.shape 

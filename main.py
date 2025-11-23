@@ -588,6 +588,18 @@ plt.show()
    
 
  
+
+fig, ax = plt.subplots(figsize=(6,4))
+
+ax.plot(tf.reduce_mean((X_sparse - X_KPFF)**2, axis=1), linewidth=1, alpha=0.5, color="green") 
+ax.plot(tf.reduce_mean((X_sparse - X_KPFF2)**2, axis=1), linewidth=1, alpha=0.5, color="red") 
+
+    
+plt.tight_layout()
+plt.savefig(pathfig+"KPFF.png")
+
+plt.show()
+    
  
  
  
