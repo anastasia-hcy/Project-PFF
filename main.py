@@ -2,15 +2,19 @@
 # Set directory #
 #################
 
-path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
-pathdat             = "C:/Users/anastasia/MyProjects/JPMorgan/data/"
-pathfig             = "C:/Users/anastasia/MyProjects/JPMorgan/Docs/"
+# path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
+# pathdat             = "C:/Users/anastasia/MyProjects/JPMorgan/data/"
+# pathfig             = "C:/Users/anastasia/MyProjects/JPMorgan/Docs/"
+
+path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts/"
+pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/data/"
 
 import os, sys
 os.chdir(path)
 cwd = os.getcwd()
 print(f"Current working directory is: {cwd}")
 sys.path.append(cwd)
+
 
 ############# 
 # Libraries #
@@ -45,16 +49,6 @@ get_current_process_ram_usage()
 
 
 
-
-
-
-
-
-
-
-
-
-
 ######################## 
 # Question 1 - Warm up #
 ########################
@@ -64,30 +58,39 @@ nD              = 4
 Np              = 100
 Nl              = 30
 
-
-
-
 """
 Data from linear Gaussian state space model
 """
-from functions import LGSSM
+from functions import SSM
 
-X1, Y1          = LGSSM(nT,nD)
+A               = tf.linalg.diag(tf.constant(tf.linspace(0.5, 0.80, nD).numpy(), dtype=tf.float64))
+X, Y            = SSM(nT, nD, model="SV", A=A)
+X1, Y1          = SSM(nT, nD)
 
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.5, color="green") 
+    plt.plot(Y1[:,i], linewidth=1, alpha=0.5, color="orange", linestyle='dashed') 
+    plt.show()
+
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.5, color="green") 
+    plt.plot(Y[:,i], linewidth=1, alpha=0.5, color="orange", linestyle='dashed') 
+    plt.show()
+   
 """
 Data from stochastic volatility model
 """
 # from functions import SVSSM
 # from functions import SE_Cov_div
 
-A               = tf.linalg.diag(tf.constant(tf.linspace(0.5, 0.80, nD).numpy(), dtype=tf.float64))
+# A               = tf.linalg.diag(tf.constant(tf.linspace(0.5, 0.80, nD).numpy(), dtype=tf.float64))
 # X, Y            = SVSSM(nT, nD, A=A, V=Cx)
     
-with open(pathdat+"dataSV.pkl", 'rb') as file:
-    dataSV = pkl.load(file)    
-X               = dataSV['States']
-Y               = dataSV['Obs']
-Cx              = dataSV['Cov']
+# with open(pathdat+"dataSV.pkl", 'rb') as file:
+#     dataSV = pkl.load(file)    
+# X               = dataSV['States']
+# Y               = dataSV['Obs']
+# Cx              = dataSV['Cov']
 
 
 
@@ -123,16 +126,21 @@ print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
 print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
 
 
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_KF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+
 """
 Extended Kalman Filter
 """
-
-# from functions import ExtendedKalmanFilter 
+from functions import ExtendedKalmanFilter 
 
 # start_cpu_time  = time.process_time()
 # initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-# X_EKF           = ExtendedKalmanFilter(Y, A=A)
+X1_EKF          = ExtendedKalmanFilter(Y1)
+X_EKF           = ExtendedKalmanFilter(Y, model="SV")
 
 # final_rss       = psutil.Process(os.getpid()).memory_info().rss
 # memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
@@ -146,10 +154,14 @@ Extended Kalman Filter
 # with open(pathdat+"res_EKF.pkl", "wb") as file:
 #     pkl.dump({"res": X_EKF, "cpu": [cpu_time_taken, memory_increase_mib]}, file)
     
-with open(pathdat+"res_EKF.pkl", 'rb') as file:
-    res_EKF = pkl.load(file)
-    
-X_EKF           = res_EKF['res']
+# with open(pathdat+"res_EKF.pkl", 'rb') as file:
+#     res_EKF = pkl.load(file)
+# X_EKF           = res_EKF['res']
+
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X1_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
 
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
@@ -162,12 +174,13 @@ for i in range(nD):
 Unscented Kalman Filter
 """
 
-# from functions import UnscentedKalmanFilter
+from functions import UnscentedKalmanFilter
 
 # start_cpu_time  = time.process_time()
 # initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-# X_UKF           = UnscentedKalmanFilter(Y, A=A)
+X1_UKF          = UnscentedKalmanFilter(Y1)
+X_UKF           = UnscentedKalmanFilter(Y, A=A, model="SV")
 
 # final_rss       = psutil.Process(os.getpid()).memory_info().rss
 # memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
@@ -178,40 +191,41 @@ Unscented Kalman Filter
 # print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
 # print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
 
-
 # with open(pathdat+"res_UKF.pkl", "wb") as file:
 #     pkl.dump({"res": X_UKF, "cpu": [cpu_time_taken, memory_increase_mib]}, file)
     
-with open(pathdat+"res_UKF.pkl", 'rb') as file:
-    res_UKF = pkl.load(file)
-    
-X_UKF           = res_UKF['res']
+# with open(pathdat+"res_UKF.pkl", 'rb') as file:
+#     res_UKF = pkl.load(file)
+# X_UKF           = res_UKF['res']
 
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_UKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
-    
 
-
-
-
-fig, ax = plt.subplots(figsize=(6,4))
 for i in range(nD):
-    ax.plot(X1[:,i], linewidth=1, alpha=0.5, color="green") 
-    ax.plot(X_KF[:,i], linewidth=1, alpha=0.5, color="red", linestyle='dashed') 
-plt.tight_layout()
-plt.savefig(pathfig+"KF.png")
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X1_UKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
 
-fig, ax = plt.subplots(1,2, figsize=(12,4))
-for i in range(nD):
-    ax[0].plot(X[:,i], linewidth=1, alpha=0.5, color="green") 
-    ax[0].plot(X_EKF[:,i], linewidth=1, alpha=0.5, color="red", linestyle='dashed') 
-for i in range(nD):
-    ax[1].plot(X[:,i], linewidth=1, alpha=0.5, color="green") 
-    ax[1].plot(X_UKF[:,i], linewidth=1, alpha=0.5, color="red", linestyle='dashed') 
-plt.tight_layout()
-plt.savefig(pathfig+"KF_all.png")
+
+
+# fig, ax = plt.subplots(figsize=(6,4))
+# for i in range(nD):
+#     ax.plot(X1[:,i], linewidth=1, alpha=0.5, color="green") 
+#     ax.plot(X_KF[:,i], linewidth=1, alpha=0.5, color="red", linestyle='dashed') 
+# plt.tight_layout()
+# plt.savefig(pathfig+"KF.png")
+
+# fig, ax = plt.subplots(1,2, figsize=(12,4))
+# for i in range(nD):
+#     ax[0].plot(X[:,i], linewidth=1, alpha=0.5, color="green") 
+#     ax[0].plot(X_EKF[:,i], linewidth=1, alpha=0.5, color="red", linestyle='dashed') 
+# for i in range(nD):
+#     ax[1].plot(X[:,i], linewidth=1, alpha=0.5, color="green") 
+#     ax[1].plot(X_UKF[:,i], linewidth=1, alpha=0.5, color="red", linestyle='dashed') 
+# plt.tight_layout()
+# plt.savefig(pathfig+"KF_all.png")
 
 
 
@@ -219,12 +233,13 @@ plt.savefig(pathfig+"KF_all.png")
 Standard Particle Filter
 """
 
-# from functions import ParticleFilter
+from functions import ParticleFilter
 
 # start_cpu_time  = time.process_time()
 # initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-# X_PF, ess_PF, weights_PF, particles_PF, particles2_PF = ParticleFilter(Y, A=A, N=Np)
+X_PF1, ess_PF1, weights_PF1, particles_PF1, particles2_PF1 = ParticleFilter(Y1, N=Np)
+X_PF, ess_PF, weights_PF, particles_PF, particles2_PF = ParticleFilter(Y, model="SV", A=A, N=Np)
 
 # final_rss       = psutil.Process(os.getpid()).memory_info().rss
 # memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
@@ -243,14 +258,29 @@ Standard Particle Filter
 #               "particles2": particles2_PF,
 #               "cpu": [cpu_time_taken, memory_increase_mib]}, file)
 
-with open(pathdat+"res_PF.pkl", 'rb') as file:
-    res_PF = pkl.load(file)
+# with open(pathdat+"res_PF.pkl", 'rb') as file:
+#     res_PF = pkl.load(file)
     
-X_PF            = res_PF['res']
-ess_PF          = res_PF['ess']
-weights_PF      = res_PF['weights']
-particles_PF    = res_PF['particles']
-particles2_PF    = res_PF['particles2']
+# X_PF            = res_PF['res']
+# ess_PF          = res_PF['ess']
+# weights_PF      = res_PF['weights']
+# particles_PF    = res_PF['particles']
+# particles2_PF    = res_PF['particles2']
+
+
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_PF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_PF1[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+
+
+
+
 
 
 
@@ -308,12 +338,16 @@ plt.savefig(pathfig+"PF2.png")
 EDH 
 """
 
-# from functions import EDH
+from functions import EDH
 
 # start_cpu_time  = time.process_time()
 # initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-# X_EDH, ess_EDH, weights_EDH, Jx_EDH, Jw_EDH = EDH(Y, A=A, N=Np, method='EKF')
+X_EDH_EKF, ess_EDH_EKF, weights_EDH_EKF, Jx_EDH_EKF, Jw_EDH_EKF = EDH(Y, model="SV", A=A, N=Np, method='EKF')
+X_EDH, ess_EDH, weights_EDH, Jx_EDH, Jw_EDH = EDH(Y, model="SV", A=A, N=Np)
+
+X_EDH_EKF_1, ess_EDH_EKF_1, weights_EDH_EKF_1, Jx_EDH_EKF_1, Jw_EDH_EKF_1 = EDH(Y1, N=Np, method='EKF')
+X_EDH_1, ess_EDH_1, weights_EDH_1, Jx_EDH_1, Jw_EDH_1 = EDH(Y1, N=Np)
 
 # final_rss       = psutil.Process(os.getpid()).memory_info().rss
 # memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
@@ -334,29 +368,36 @@ EDH
 #               "cpu": [cpu_time_taken, memory_increase_mib]}, file)
 
 
-with open(pathdat+"res_EDH.pkl", 'rb') as file:
-    res_EDH = pkl.load(file)
+# with open(pathdat+"res_EDH.pkl", 'rb') as file:
+#     res_EDH = pkl.load(file)
     
-X_EDH           = res_EDH['res']
-ess_EDH         = res_EDH['ess']
-weights_EDH     = res_EDH['weights']
-Jx_EDH          = res_EDH['Jx']
-Jw_EDH          = res_EDH['Jw']
+# X_EDH           = res_EDH['res']
+# ess_EDH         = res_EDH['ess']
+# weights_EDH     = res_EDH['weights']
+# Jx_EDH          = res_EDH['Jx']
+# Jw_EDH          = res_EDH['Jw']
 
 
-with open(pathdat+"res_EDH_EKF.pkl", 'rb') as file:
-    res_EDH_EKF = pkl.load(file)
+# with open(pathdat+"res_EDH_EKF.pkl", 'rb') as file:
+#     res_EDH_EKF = pkl.load(file)
     
-X_EDH_EKF           = res_EDH_EKF['res']
-ess_EDH_EKF         = res_EDH_EKF['ess']
-weights_EDH_EKF     = res_EDH_EKF['weights']
-Jx_EDH_EKF          = res_EDH_EKF['Jx']
-Jw_EDH_EKF          = res_EDH_EKF['Jw']
+# X_EDH_EKF           = res_EDH_EKF['res']
+# ess_EDH_EKF         = res_EDH_EKF['ess']
+# weights_EDH_EKF     = res_EDH_EKF['weights']
+# Jx_EDH_EKF          = res_EDH_EKF['Jx']
+# Jw_EDH_EKF          = res_EDH_EKF['Jw']
 
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_EDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.plot(X_EDH_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    # plt.plot(X_EDH_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+
+
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_EDH_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.plot(X_EDH_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
  
  
