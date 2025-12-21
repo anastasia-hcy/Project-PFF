@@ -3,7 +3,7 @@
 #################
 
 path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM"
-# path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts/"
+# path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/"
 
 import os, sys
 os.chdir(path)
@@ -26,23 +26,26 @@ import math
 pi_constant = tf.constant(math.pi, dtype=tf.float64)
 
 import unittest
-from functions import SE_kernel, SE_kernel_divC, SE_Cov_div
-from functions import norm_rvs, LG_Jacobi
-from functions import SV_transform, SV_Jacobi
-from functions import measurements, measurements_Jacobi, measurements_pred, measurements_covyHat
-from functions import SSM
+from scripts import *
 
-from functions import KF_Predict, KF_Gain, KF_Filter, KalmanFilter
-from functions import EKF_Predict, EKF_Gain, EKF_Filter, ExtendedKalmanFilter
-from functions import SigmaWeights, SigmaPoints, UKF_Propagate, UKF_Predict_mean, UKF_Predict_cov, UKF_Predict_crosscov, UKF_Predict, UKF_Gain, UKF_Filter, UnscentedKalmanFilter
+# from model import SE_kernel, SE_kernel_divC, SE_Cov_div
+# from model import norm_rvs, LG_Jacobi
+# from model import SV_transform, SV_Jacobi, SV_measurements
+# from model import sensor_transform, sensor_Jacobi, sensor_measurements
+# from model import measurements, measurements_Jacobi, measurements_pred, measurements_covyHat
+# from model import SSM
 
-from functions import initiate_particles, draw_particles, LogImportance, LogLikelihood, LogTarget, compute_weights, normalize_weights, compute_ESS, multinomial_resample, compute_posterior
-from functions import ParticleFilter
+# from functions import KF_Predict, KF_Gain, KF_Filter, KalmanFilter
+# from functions import EKF_Predict, EKF_Gain, EKF_Filter, ExtendedKalmanFilter
+# from functions import SigmaWeights, SigmaPoints, UKF_Propagate, UKF_Predict_mean, UKF_Predict_cov, UKF_Predict_crosscov, UKF_Predict, UKF_Gain, UKF_Filter, UnscentedKalmanFilter
 
-from functions import Li17eq10, Li17eq11
-from functions import EDH_linearize_EKF, EDH_linearize_UKF, EDH_flow_dynamics, EDH_flow_lp, EDH
-from functions import LEDH_linearize_EKF, LEDH_linearize_UKF, LEDH_flow_dynamics, LEDH_flow_lp, LEDH
-from functions import Hu21eq13, Hu21eq15, KPFF_LP, KPFF_RKHS, KPFF_flow, KernelPFF
+# from functions import initiate_particles, draw_particles, LogImportance, LogLikelihood, LogTarget, compute_weights, normalize_weights, compute_ESS, multinomial_resample, compute_posterior
+# from functions import ParticleFilter
+
+# from functions import Li17eq10, Li17eq11
+# from functions import EDH_linearize_EKF, EDH_linearize_UKF, EDH_flow_dynamics, EDH_flow_lp, EDH
+# from functions import LEDH_linearize_EKF, LEDH_linearize_UKF, LEDH_flow_dynamics, LEDH_flow_lp, LEDH
+# from functions import Hu21eq13, Hu21eq15, KPFF_LP, KPFF_RKHS, KPFF_flow, KernelPFF
 
 ##############
 # Unit tests #
@@ -133,7 +136,8 @@ class TestSSM(unittest.TestCase):
     def test_sv_transform(self):
         
         u               = tf.eye(self.nO, dtype=tf.float64)
-        sample          = SV_transform(self.nO, self.mean, self.B, self.X, self.W, u)
+        gx              = SV_transform(self.B, self.X)
+        sample          = SV_measurements(self.nO, self.mean, gx, self.W, u)
 
         self.assertEqual(sample.shape, (self.nO,))
         self.assertTrue(isinstance(sample, tf.Tensor))
@@ -141,7 +145,8 @@ class TestSSM(unittest.TestCase):
     def test_SV_Jacobi(self):
 
         y_pred          = tf.constant(tf.range(self.nD, dtype=tf.float64))
-        Jx, Jw          = SV_Jacobi(self.X, y_pred, self.B)
+        gx              = SV_transform(self.B, self.X)
+        Jx, Jw          = SV_Jacobi(gx, y_pred)
 
         expected_Jx     = tf.linalg.diag(y_pred / 2)
         expected_Jw     = tf.linalg.diag(tf.linalg.matvec(self.B, tf.math.exp(self.X / 2)))
@@ -364,7 +369,8 @@ class TestEKF(unittest.TestCase):
     def test_ekf_gain(self):
 
         ypred           = tf.constant(tf.range(self.nD, dtype=tf.float64))
-        Jx, Jw          = SV_Jacobi(self.Xprev, ypred, self.B)
+        gx              = SV_transform(self.B, self.Xprev)
+        Jx, Jw          = SV_Jacobi(gx, ypred)
         K               = EKF_Gain(self.P, Jx, Jw, self.W, self.u)
         
         Mx              = self.P @ tf.transpose(Jx)
@@ -378,7 +384,8 @@ class TestEKF(unittest.TestCase):
     def test_ekf_filter(self):
 
         y_pred          = tf.constant(tf.range(self.nD, dtype=tf.float64))
-        Jx, Jw          = SV_Jacobi(self.Xprev, y_pred, self.B)
+        gx              = SV_transform(self.B, self.Xprev)
+        Jx, Jw          = SV_Jacobi(gx, y_pred)
         K               = EKF_Gain(self.P, Jx, Jw, self.W, self.u)
         x, P            = EKF_Filter(self.Xprev, self.P, self.Y, y_pred, Jx, K)
 
