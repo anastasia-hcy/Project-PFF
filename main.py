@@ -19,21 +19,18 @@ sys.path.append(cwd)
 # Libraries #
 #############
 
-import pickle as pkl 
-
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-import matplotlib.patches as mpatches
-colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-
-from scipy.stats import multivariate_normal
-import numpy as np 
-
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 tf.random.set_seed(123)
+
+import pickle as pkl 
+import matplotlib.pyplot as plt
+colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+from scipy.stats import multivariate_normal
+import numpy as np 
 
 import psutil
 import time
@@ -53,8 +50,6 @@ get_current_process_ram_usage()
 # Simulate datasets #
 #####################
 
-from scripts import *
-
 nT              = 100
 nD              = 4
 nX              = 10
@@ -66,6 +61,8 @@ observed        = [0,1,2,4,5,6,8,9]
 """
 Simulate non-sparse data 
 """
+
+from scripts import SSM, SE_Cov_div
 
 # X1, Y1          = SSM(nT, nD)
 
@@ -89,25 +86,14 @@ Simulate sparse data
 # X_sparse, Y_sparse    = SSM(nT, nX, model="SV", n_sparse=Ny, A=A_sparse, B=B_sparse, V=Cx_sparse)
 # X1_sparse, Y1_sparse  = SSM(nT, nX, n_sparse=Ny,  B=B_sparse)
 
-
-"""
-Save simulated data
-"""
-
-# dat = {'LG_States': X1, 'LG_Obs': Y1, 
-#        'SV_States': X, 'SV_Obs': Y, 'A': A, 'Cx': Cx, 
-#        'sparse_LG_States': X1_sparse, 'sparse_LG_Obs': Y1_sparse,
-#        'sparse_States': X_sparse, 'sparse_Obs': Y_sparse, 'sparse_A': A_sparse, 'sparse_B': B_sparse, 'sparse_Cx': Cx_sparse}
-# with open(pathdat+"data_sim.pkl", 'wb') as file:
-#     pkl.dump(dat, file)    
-
-
 """
 Load simulated data
 """
 
 with open(pathdat+"data_sim.pkl", 'rb') as file:
     data        = pkl.load(file)    
+# X2              = data['Sensor_States']
+# Y2              = data['Sensor_Obs']
 X1              = data['LG_States']
 Y1              = data['LG_Obs']
 X               = data['SV_States']
@@ -122,10 +108,29 @@ A_sparse        = data['sparse_A']
 B_sparse        = data['sparse_B']
 Cx_sparse       = data['sparse_Cx']
 
+"""
+Save simulated data
+"""
+
+# dat = {'Sensor_States': X2, 'Sensor_Obs': Y2, 
+#        'LG_States': X1, 'LG_Obs': Y1, 
+#        'SV_States': X, 'SV_Obs': Y, 'A': A, 'Cx': Cx, 
+#        'sparse_LG_States': X1_sparse, 'sparse_LG_Obs': Y1_sparse,
+#        'sparse_States': X_sparse, 'sparse_Obs': Y_sparse, 'sparse_A': A_sparse, 'sparse_B': B_sparse, 'sparse_Cx': Cx_sparse}
+# with open(pathdat+"data_sim.pkl", 'wb') as file:
+#     pkl.dump(dat, file)    
+
 
 """
 Plots simulated data
 """
+
+
+fig, ax = plt.subplots(figsize=(6,4))
+for i in range(2):
+    plt.plot(X2[:,i], linewidth=1, alpha=0.5, color="green") 
+    plt.plot(Y2[:,i], linewidth=1, alpha=0.5, color="orange", linestyle='dashed') 
+plt.show()
 
 fig, ax = plt.subplots(figsize=(6,4))
 for i in range(nD):
@@ -179,18 +184,11 @@ plt.show()
 
 
 
+########################## 
+# Standard Kalman Filter #
+##########################
 
-fig, ax = plt.subplots(figsize=(6,4))
-for i in range(2):
-    plt.plot(X2[:,i], linewidth=1, alpha=0.5, color="green") 
-    plt.plot(Y2[:,i], linewidth=1, alpha=0.5, color="orange", linestyle='dashed') 
-plt.show()
-
-
-
-"""
-Standard Kalman Filter
-"""
+from scripts import KalmanFilter
 
 start_cpu_time  = time.process_time()
 initial_rss     = psutil.Process(os.getpid()).memory_info().rss
@@ -216,12 +214,22 @@ plt.show()
 
 
 
-"""
-Extended Kalman Filter
-"""
 
+########################## 
+# Extended Kalman Filter #
+##########################
+
+# from scripts import ExtendedKalmanFilter
+
+"""
+EKF - LG
+"""
 # X1_EKF          = ExtendedKalmanFilter(Y1)
 
+
+"""
+EKF - SV
+"""
 # start_cpu_time  = time.process_time()
 # initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
@@ -235,6 +243,10 @@ Extended Kalman Filter
 
 # print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
 # print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
+
+"""
+EKF - Results
+"""
 
 # with open(pathdat+"res_EKF.pkl", "wb") as file:
 #     pkl.dump({"res": X_EKF, 
@@ -263,14 +275,20 @@ plt.show()
 
 
 
+########################### 
+# Unscented Kalman Filter #
+###########################
+
+# from scripts import UnscentedKalmanFilter
 
 """
-Unscented Kalman Filter
+UKF - LG
 """
-
-
 # X1_UKF          = UnscentedKalmanFilter(Y1)
 
+"""
+UKF - SV
+"""
 # start_cpu_time  = time.process_time()
 # initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
@@ -285,11 +303,14 @@ Unscented Kalman Filter
 # print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
 # print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
 
+"""
+UKF - Results
+"""
+
 # with open(pathdat+"res_UKF.pkl", "wb") as file:
 #     pkl.dump({"res": X_UKF, 
 #               "cpu": [cpu_time_taken, memory_increase_mib],
 #               "res_testLG": X1_UKF}, file)
-    
 
 with open(pathdat+"res_UKF.pkl", 'rb') as file:
     res_UKF = pkl.load(file)
@@ -311,14 +332,23 @@ plt.show()
 
 
 
-"""
-Standard Particle Filter
-"""
 
+############################ 
+# Standard Particle Filter #
+############################ 
+
+# from scripts import ParticleFilter
 # Np              = 100
 
+"""
+PF - LG
+"""
 
 # X_PF1, ess_PF1, weights_PF1, particles_PF1, particles2_PF1 = ParticleFilter(Y1, N=Np)
+
+"""
+PF - SV
+"""
 
 # start_cpu_time  = time.process_time()
 # initial_rss     = psutil.Process(os.getpid()).memory_info().rss
@@ -333,6 +363,11 @@ Standard Particle Filter
 
 # print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
 # print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
+
+
+"""
+PF - Results
+"""
 
 # with open(pathdat+"res_PF.pkl", "wb") as file:
 #     pkl.dump({"res": X_PF, 
@@ -414,18 +449,23 @@ plt.show()
 
 
 
+#######
+# EDH #
+#######
 
-
-
-"""
-EDH 
-"""
-
+# from scripts import EDH
 # Np              = 100 
 
+"""
+EDH - LG 
+"""
 
 # X_EDH_EKF_1, ess_EDH_EKF_1, weights_EDH_EKF_1, Jx_EDH_EKF_1, Jw_EDH_EKF_1 = EDH(Y1, N=Np, method='EKF')
 # X_EDH_1, ess_EDH_1, weights_EDH_1, Jx_EDH_1, Jw_EDH_1 = EDH(Y1, N=Np, method='UKF')
+
+"""
+EDH - SV 
+"""
 
 # start_cpu_time  = time.process_time()
 # initial_rss     = psutil.Process(os.getpid()).memory_info().rss
@@ -454,6 +494,11 @@ EDH
 
 # print(f"Memory increase during code block: {memory_increase_mib_EKF:.3f} MiB")
 # print(f"CPU time taken: {cpu_time_taken_EKF:.3f} seconds")
+
+
+"""
+EDH - Results 
+"""
 
 # with open(pathdat+"res_EDH.pkl", "wb") as file:
 #     pkl.dump({"res": X_EDH, 
@@ -526,71 +571,84 @@ plt.show()
  
 
 
+########
+# LEDH #
+########
+
+# from scripts import LEDH
+# Np = 100 
+
 """
-LEDH 
+LEDH - LG 
 """
-Np = 100 
 
-X_LEDH_EKF_1, ess_LEDH_EKF_1, weights_LEDH_EKF_1, Jx_LEDH_EKF_1, Jw_LEDH_EKF_1 = LEDH(Y1, N=Np, method='EKF')
-X_LEDH_1, ess_LEDH_1, weights_LEDH_1, Jx_LEDH_1, Jw_LEDH_1 = LEDH(Y1, N=Np, method='UKF')
-
-
-start_cpu_time  = time.process_time()
-initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-X_LEDH_EKF, ess_LEDH_EKF, weights_LEDH_EKF, Jx_LEDH_EKF, Jw_LEDH_EKF = LEDH(Y, V=Cx, model="SV", N=Np, method='EKF')
-
-final_rss       = psutil.Process(os.getpid()).memory_info().rss
-memory_increase_mib_EKF = (final_rss - initial_rss) / (1024 ** 2)
-
-end_cpu_time    = time.process_time()
-cpu_time_taken_EKF  = end_cpu_time - start_cpu_time
-
-print(f"Memory increase during code block: {memory_increase_mib_EKF:.3f} MiB")
-print(f"CPU time taken: {cpu_time_taken_EKF:.3f} seconds")
+# X_LEDH_EKF_1, ess_LEDH_EKF_1, weights_LEDH_EKF_1, Jx_LEDH_EKF_1, Jw_LEDH_EKF_1 = LEDH(Y1, N=Np, method='EKF')
+# X_LEDH_1, ess_LEDH_1, weights_LEDH_1, Jx_LEDH_1, Jw_LEDH_1 = LEDH(Y1, N=Np, method='UKF')
 
 
-start_cpu_time  = time.process_time()
-initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+"""
+LEDH - SV 
+"""
 
-X_LEDH, ess_LEDH, weights_LEDH, Jx_LEDH, Jw_LEDH = LEDH(Y, V=Cx, model="SV", N=Np, method='UKF')
+# start_cpu_time  = time.process_time()
+# initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-final_rss       = psutil.Process(os.getpid()).memory_info().rss
-memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+# X_LEDH_EKF, ess_LEDH_EKF, weights_LEDH_EKF, Jx_LEDH_EKF, Jw_LEDH_EKF = LEDH(Y, V=Cx, model="SV", N=Np, method='EKF')
 
-end_cpu_time    = time.process_time()
-cpu_time_taken  = end_cpu_time - start_cpu_time
+# final_rss       = psutil.Process(os.getpid()).memory_info().rss
+# memory_increase_mib_EKF = (final_rss - initial_rss) / (1024 ** 2)
 
-print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
-print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
+# end_cpu_time    = time.process_time()
+# cpu_time_taken_EKF  = end_cpu_time - start_cpu_time
+
+# print(f"Memory increase during code block: {memory_increase_mib_EKF:.3f} MiB")
+# print(f"CPU time taken: {cpu_time_taken_EKF:.3f} seconds")
 
 
-with open(pathdat+"res_LEDH.pkl", "wb") as file:
-    pkl.dump({"res": X_LEDH, 
-              "ess": ess_LEDH,
-              "weights": weights_LEDH,
-              "Jx": Jx_LEDH,
-              "Jw": Jw_LEDH,
-              "cpu": [cpu_time_taken, memory_increase_mib], 
+# start_cpu_time  = time.process_time()
+# initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-              "res_EKF": X_LEDH_EKF, 
-              "ess_EKF": ess_LEDH_EKF,
-              "weights_EKF": weights_LEDH_EKF,
-              "Jx_EKF": Jx_LEDH_EKF,
-              "Jw_EKF": Jw_LEDH_EKF,
-              "cpu_EKF": [cpu_time_taken_EKF, memory_increase_mib_EKF], 
+# X_LEDH, ess_LEDH, weights_LEDH, Jx_LEDH, Jw_LEDH = LEDH(Y, V=Cx, model="SV", N=Np, method='UKF')
 
-              "res_testLG": X_LEDH_1, 
-              "ess_testLG": ess_LEDH_1,
-              "weights_testLG": weights_LEDH_1,
-              "Jx_testLG": Jx_LEDH_1,
-              "Jw_testLG": Jw_LEDH_1, 
+# final_rss       = psutil.Process(os.getpid()).memory_info().rss
+# memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+# end_cpu_time    = time.process_time()
+# cpu_time_taken  = end_cpu_time - start_cpu_time
+
+# print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
+# print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
+
+"""
+LEDH - Results
+"""
+
+# with open(pathdat+"res_LEDH.pkl", "wb") as file:
+#     pkl.dump({"res": X_LEDH, 
+#               "ess": ess_LEDH,
+#               "weights": weights_LEDH,
+#               "Jx": Jx_LEDH,
+#               "Jw": Jw_LEDH,
+#               "cpu": [cpu_time_taken, memory_increase_mib], 
+
+#               "res_EKF": X_LEDH_EKF, 
+#               "ess_EKF": ess_LEDH_EKF,
+#               "weights_EKF": weights_LEDH_EKF,
+#               "Jx_EKF": Jx_LEDH_EKF,
+#               "Jw_EKF": Jw_LEDH_EKF,
+#               "cpu_EKF": [cpu_time_taken_EKF, memory_increase_mib_EKF], 
+
+#               "res_testLG": X_LEDH_1, 
+#               "ess_testLG": ess_LEDH_1,
+#               "weights_testLG": weights_LEDH_1,
+#               "Jx_testLG": Jx_LEDH_1,
+#               "Jw_testLG": Jw_LEDH_1, 
               
-              "res_testLG_EKF": X_LEDH_EKF_1, 
-              "ess_testLG_EKF": ess_LEDH_EKF_1,
-              "weights_testLG_EKF": weights_LEDH_EKF_1,
-              "Jx_testLG_EKF": Jx_LEDH_EKF_1,
-              "Jw_testLG_EKF": Jw_LEDH_EKF_1,}, file)
+#               "res_testLG_EKF": X_LEDH_EKF_1, 
+#               "ess_testLG_EKF": ess_LEDH_EKF_1,
+#               "weights_testLG_EKF": weights_LEDH_EKF_1,
+#               "Jx_testLG_EKF": Jx_LEDH_EKF_1,
+#               "Jw_testLG_EKF": Jw_LEDH_EKF_1,}, file)
 
 
 with open(pathdat+"res_LEDH.pkl", 'rb') as file:
@@ -655,23 +713,68 @@ plt.show()
     
     
     
-    
-    
-    
-    
+#######
+# SDE #    
+#######
+
+from scripts import SDE 
+Np              = 50
+Nstep           = 50
+
 """
-KPFF
+SDE - LG 
+"""
+X_SDE_1, Cond_SDE_1, stiff_SDE_1 = SDE(Y1, N=Np, Nstep=Nstep)
+
+"""
+SDE - Sensor
+"""
+X_SDE_2, Cond_SDE_2, stiff_SDE_2 = SDE(Y2, model="sensor", N=Np, Nstep=Nstep)
+
+"""
+SDE - SV
+"""
+X_SDE, Cond_SDE, stiff_SDE = SDE(Y, model="SV", N=Np, Nstep=Nstep)
+
+"""
+SDE - Results
 """
 
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+    
+for i in range(2):
+    plt.plot(X2[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_SDE_2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
+    plt.plot(X_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
+    
+    
+    
+########
+# KPFF #
+########
+
+# from scripts import KernelPFF
 # Np              = 20
 # Nl              = 30
 
-# from functions import KernelPFF
-
+"""
+KPFF - LG
+"""
 
 # X_KPFF2_1, Jx_KPFF2_1, Jw_KPFF2_1, particles_KPFF2_1, particles2_KPFF2_1    = KernelPFF(Y1_sparse, Nx=nX, N=Np, B=B_sparse, method="scalar")
 # X_KPFF_1, Jx_KPFF_1, Jw_KPFF_1, particles_KPFF_1, particles2_KPFF_1         = KernelPFF(Y1_sparse, Nx=nX, N=Np, B=B_sparse)
 
+"""
+KPFF - SV
+"""
 
 # start_cpu_time  = time.process_time()
 # initial_rss     = psutil.Process(os.getpid()).memory_info().rss
@@ -702,32 +805,36 @@ KPFF
 # print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
 
 
-with open(pathdat+"res_KPFF.pkl", "wb") as file:
-    pkl.dump({"res": X_KPFF,
-              "Jx": Jx_KPFF,
-              "Jw": Jw_KPFF, 
-              "particles": particles_KPFF, 
-              "particles2": particles2_KPFF,
-              "cpu": [cpu_time_taken, memory_increase_mib],
+"""
+KPFF - Results
+"""
 
-              "res_2": X_KPFF2,
-              "Jx_2": Jx_KPFF2,
-              "Jw_2": Jw_KPFF2, 
-              "particles_2": particles_KPFF2, 
-              "particles2_2": particles2_KPFF2,
-              "cpu_2": [cpu_time_taken2, memory_increase_mib2],
+# with open(pathdat+"res_KPFF.pkl", "wb") as file:
+#     pkl.dump({"res": X_KPFF,
+#               "Jx": Jx_KPFF,
+#               "Jw": Jw_KPFF, 
+#               "particles": particles_KPFF, 
+#               "particles2": particles2_KPFF,
+#               "cpu": [cpu_time_taken, memory_increase_mib],
 
-              "res_testLG": X_KPFF_1,
-              "Jx_testLG": Jx_KPFF_1, 
-              "Jw_testLG": Jw_KPFF_1, 
-              "particles_testLG": particles_KPFF_1,
-              "particles2_testLG": particles2_KPFF_1,  
+#               "res_2": X_KPFF2,
+#               "Jx_2": Jx_KPFF2,
+#               "Jw_2": Jw_KPFF2, 
+#               "particles_2": particles_KPFF2, 
+#               "particles2_2": particles2_KPFF2,
+#               "cpu_2": [cpu_time_taken2, memory_increase_mib2],
 
-              "res_testLG2": X_KPFF2_1, 
-              "Jx_testLG2": Jx_KPFF2_1,
-              "Jw_testLG2": Jw_KPFF2_1,
-              "particles_testLG2": particles_KPFF2_1,
-              "particles2_testLG2": particles2_KPFF2_1}, file)
+#               "res_testLG": X_KPFF_1,
+#               "Jx_testLG": Jx_KPFF_1, 
+#               "Jw_testLG": Jw_KPFF_1, 
+#               "particles_testLG": particles_KPFF_1,
+#               "particles2_testLG": particles2_KPFF_1,  
+
+#               "res_testLG2": X_KPFF2_1, 
+#               "Jx_testLG2": Jx_KPFF2_1,
+#               "Jw_testLG2": Jw_KPFF2_1,
+#               "particles_testLG2": particles_KPFF2_1,
+#               "particles2_testLG2": particles2_KPFF2_1}, file)
 
 
 with open(pathdat+"res_KPFF.pkl", 'rb') as file:

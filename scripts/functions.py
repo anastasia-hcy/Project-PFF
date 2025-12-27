@@ -1,12 +1,4 @@
 import os
-
-# path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
-# path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts/"
-# import sys
-# os.chdir(path)
-# cwd = os.getcwd()
-# sys.path.append(cwd)
-
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -120,9 +112,12 @@ def ExtendedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=None
     --------
     X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the Extended Kalman Filter. 
     """
-    nTimes, ndims   = y.shape 
-    model           = "LG" if model is None else model
+    nTimes, ndims   = y.shape     
     
+    model           = "LG" if model is None else model
+    if model == "sensor" and ndims != 2:
+        raise ValueError("The state space dimension must be 2 for the location sensoring model.")
+        
     if model == "SV" and A is None : 
         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
     if model == "SV" and A is not None :
@@ -137,11 +132,17 @@ def ExtendedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=None
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
     
-    mu0             = tf.zeros((ndims,), dtype=tf.float64) if mu0 is None else mu0
+
+    if model == "sensor" and mu0 is None:
+        mu0         = tf.constant([3.0,5.0], dtype=tf.float64) 
+    else:
+        mu0         = tf.zeros((ndims,), dtype=tf.float64)     
+        
     if model == "SV" and Sigma0 is None :
         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
     if model != "SV" and Sigma0 is None: 
         Sigma0      = V
+        
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
 
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
@@ -268,7 +269,10 @@ def UnscentedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=Non
     """
 
     nTimes, ndims   = y.shape 
+
     model           = "LG" if model is None else model
+    if model == "sensor" and ndims != 2:
+        raise ValueError("The state space dimension must be 2 for the location sensoring model.")
     
     if model == "SV" and A is None : 
         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
@@ -283,8 +287,12 @@ def UnscentedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=Non
     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
-    
-    mu0             = tf.zeros((ndims,), dtype=tf.float64) if mu0 is None else mu0
+
+    if model == "sensor" and mu0 is None:
+        mu0         = tf.constant([3.0,5.0], dtype=tf.float64) 
+    else:
+        mu0         = tf.zeros((ndims,), dtype=tf.float64)     
+        
     if model == "SV" and Sigma0 is None :
         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
     if model != "SV" and Sigma0 is None: 
@@ -360,7 +368,6 @@ def LogTarget(x, xprev, Sigma0):
     diff            = x - xprev
     return - 1/2 *  tf.math.log(tf.linalg.det(Sigma0)) - 1/2 * tf.linalg.tensordot( tf.linalg.matvec(InvSigma0, diff), diff, axes=1) 
 
-
 def draw_particles(N, n, model, I, y, xprev, SigmaX, muy, SigmaY, Sigma0, B, U):
     """Draw particles, xn, from the importance distribution and compute the log posterior probability, Lp."""
     xn              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
@@ -433,7 +440,10 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
     """
     
     nTimes, ndims   = y.shape 
+    
     model           = "LG" if model is None else model
+    if model == "sensor" and ndims != 2:
+        raise ValueError("The state space dimension must be 2 for the location sensoring model.")
     
     if model == "SV" and A is None : 
         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
@@ -449,11 +459,16 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
     
-    mu0             = tf.zeros((ndims,), dtype=tf.float64) if mu0 is None else mu0
+    if model == "sensor" and mu0 is None:
+        mu0         = tf.constant([3.0,5.0], dtype=tf.float64) 
+    else:
+        mu0         = tf.zeros((ndims,), dtype=tf.float64)  
+        
     if model == "SV" and Sigma0 is None :
         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
     if model != "SV" and Sigma0 is None: 
         Sigma0      = V
+        
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
     
     N               = 1000 if N is None else N
@@ -594,6 +609,8 @@ def EDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
     
     nTimes, ndims   = y.shape 
     model           = "LG" if model is None else model
+    if model == "sensor" and ndims != 2:
+        raise ValueError("The state space dimension must be 2 for the location sensoring model.")
     
     if model == "SV" and A is None : 
         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
@@ -609,7 +626,11 @@ def EDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
     
-    mu0             = tf.zeros((ndims,), dtype=tf.float64) if mu0 is None else mu0
+    if model == "sensor" and mu0 is None:
+        mu0         = tf.constant([3.0,5.0], dtype=tf.float64) 
+    else:
+        mu0         = tf.zeros((ndims,), dtype=tf.float64)   
+        
     if model == "SV" and Sigma0 is None :
         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
     if model != "SV" and Sigma0 is None: 
@@ -673,7 +694,7 @@ def EDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
 
         el                              = y_pred - tf.linalg.matvec(H, m_pred) 
         eta1                            = eta0
-        Lamb                            = 0.0
+        Lamb                            = stepsize
         for j in range(Nstep): 
             eta1_move, eta_move         = EDH_flow_dynamics(Np, ndims, Lamb, Rates[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
             Lamb += Rates[j]
@@ -706,11 +727,6 @@ def EDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
         P_prev      = P_filt
         
     return X_filtered, ESS, Weights, Jacobi_X, Jacobi_W
-
-
-
-
-
 
 
 ###############################
@@ -833,7 +849,7 @@ def LEDH_flow_dynamics(N, n, Lamb, epsilon, I, eta, eta0, Pi, Hi, Ri, err, y, U)
     prod            = tf.Variable(tf.zeros((N,), dtype=tf.float64))    
     for i in range(N):                 
         Ai          = Li17eq10(Lamb, Hi[i,:,:], Pi[i,:,:], Ri[i,:,:], U)
-        bi          = Li17eq11(I, Lamb, Ai, Hi[i,:,:], Pi[i,:,:], Ri[i,:,:], y, err[i,:], eta0[i,:], U)
+        bi          = Li17eq11(I, Lamb, Ai, Hi[i,:,:], Pi[i,:,:], Ri[i,:,:], y, err[i,:], eta[i,:], U)
         move0[i,:].assign( epsilon * (tf.linalg.matvec(Ai, eta0[i,:]) + bi) )
         move[i,:].assign( epsilon * (tf.linalg.matvec(Ai, eta[i,:]) + bi) )
         prod[i].assign( tf.math.abs( tf.linalg.det(I + epsilon * Ai) ) )
@@ -876,6 +892,9 @@ def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=
     
     nTimes, ndims   = y.shape 
     model           = "LG" if model is None else model
+    if model == "sensor" and ndims != 2:
+        raise ValueError("The state space dimension must be 2 for the location sensoring model.")
+        
     
     if model == "SV" and A is None : 
         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
@@ -890,8 +909,12 @@ def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=
     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
-    
-    mu0             = tf.zeros((ndims,), dtype=tf.float64) if mu0 is None else mu0
+
+    if model == "sensor" and mu0 is None:
+        mu0         = tf.constant([3.0,5.0], dtype=tf.float64) 
+    else:
+        mu0         = tf.zeros((ndims,), dtype=tf.float64)   
+        
     if model == "SV" and Sigma0 is None :
         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
     if model != "SV" and Sigma0 is None: 
@@ -940,11 +963,11 @@ def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=
         
         eta1        = eta0
         theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
-        Lamb        = 0.0
+        Lamb        = stepsize
         for j in range(Nstep): 
             
-            eta1_move, eta_move, theta_prod     = LEDH_flow_dynamics(Np, ndims, Lamb, Rates[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
-            
+            eta1_move, eta_move, theta_prod     = LEDH_flow_dynamics(Np, ndims, Lamb, Rates[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)     
+                     
             Lamb += Rates[j]
             eta.assign_add(eta_move)
             eta1.assign_add(eta1_move)

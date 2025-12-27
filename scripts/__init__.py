@@ -17,6 +17,8 @@ from .functions import EDH_linearize_EKF, EDH_linearize_UKF, EDH_flow_dynamics, 
 from .functions import LEDH_linearize_EKF, LEDH_linearize_UKF, LEDH_flow_dynamics, LEDH_flow_lp, LEDH
 from .functions import Hu21eq13, Hu21eq15, KPFF_LP, KPFF_RKHS, KPFF_flow, KernelPFF
 
+from .functions2 import Dai22eq28, initial_solve_err, final_solve, Dai22eq22, stiffness_ratio, JacobiLogNormal, HessianLogNormal, Dai22eq11eq12, drift_f, sde_flow_dynamics, SDE
+
 # Define package-level variables
 # __version__ = "1.0.0"
 
@@ -38,4 +40,9 @@ __all__ = ["SE_kernel", "SE_kernel_divC", "SE_Cov_div",
            "Li17eq10", "Li17eq11", 
            "EDH_linearize_EKF", "EDH_linearize_UKF", "EDH_flow_dynamics", "EDH_flow_lp", "EDH", 
            "LEDH_linearize_EKF", "LEDH_linearize_UKF", "LEDH_flow_dynamics", "LEDH_flow_lp", "LEDH", 
-           "Hu21eq13", "Hu21eq15", "KPFF_LP", "KPFF_RKHS", "KPFF_flow", "KernelPFF"]
+           "Hu21eq13", "Hu21eq15", "KPFF_LP", "KPFF_RKHS", "KPFF_flow", "KernelPFF",
+           
+           "Dai22eq28", "initial_solve_err", "final_solve", "Dai22eq22", "stiffness_ratio", "JacobiLogNormal", "HessianLogNormal", "Dai22eq11eq12", "drift_f", "sde_flow_dynamics", "SDE"]
+
+
+

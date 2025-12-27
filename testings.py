@@ -28,25 +28,6 @@ pi_constant = tf.constant(math.pi, dtype=tf.float64)
 import unittest
 from scripts import *
 
-# from model import SE_kernel, SE_kernel_divC, SE_Cov_div
-# from model import norm_rvs, LG_Jacobi
-# from model import SV_transform, SV_Jacobi, SV_measurements
-# from model import sensor_transform, sensor_Jacobi, sensor_measurements
-# from model import measurements, measurements_Jacobi, measurements_pred, measurements_covyHat
-# from model import SSM
-
-# from functions import KF_Predict, KF_Gain, KF_Filter, KalmanFilter
-# from functions import EKF_Predict, EKF_Gain, EKF_Filter, ExtendedKalmanFilter
-# from functions import SigmaWeights, SigmaPoints, UKF_Propagate, UKF_Predict_mean, UKF_Predict_cov, UKF_Predict_crosscov, UKF_Predict, UKF_Gain, UKF_Filter, UnscentedKalmanFilter
-
-# from functions import initiate_particles, draw_particles, LogImportance, LogLikelihood, LogTarget, compute_weights, normalize_weights, compute_ESS, multinomial_resample, compute_posterior
-# from functions import ParticleFilter
-
-# from functions import Li17eq10, Li17eq11
-# from functions import EDH_linearize_EKF, EDH_linearize_UKF, EDH_flow_dynamics, EDH_flow_lp, EDH
-# from functions import LEDH_linearize_EKF, LEDH_linearize_UKF, LEDH_flow_dynamics, LEDH_flow_lp, LEDH
-# from functions import Hu21eq13, Hu21eq15, KPFF_LP, KPFF_RKHS, KPFF_flow, KernelPFF
-
 ##############
 # Unit tests #
 ##############
@@ -108,7 +89,7 @@ class TestSSM(unittest.TestCase):
         self.Sigma      = tf.eye(self.nO, dtype=tf.float64)
 
         self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.99, 0.99, dtype=tf.float64))
-        self.B          = tf.random.uniform((self.nO,self.nD), -10.0, 10.0, dtype=tf.float64)
+        self.B          = tf.random.uniform((self.nO, self.nD), -10.0, 10.0, dtype=tf.float64)
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
         
         self.W          = tf.linalg.diag(tf.random.uniform((self.nO,), 1e-3, 2.0, dtype=tf.float64))
@@ -234,7 +215,7 @@ class TestSSM(unittest.TestCase):
         self.assertTrue(isinstance(X, tf.Variable))
         self.assertTrue(isinstance(Y, tf.Variable))
 
-        XS, YS          = SSM(self.nT, self.nD, n_sparse=self.nO, model="SV", A=self.A, V=self.V)
+        XS, YS          = SSM(self.nT, self.nD, n_sparse=self.nO, model="SV", A=self.A, B=self.B, V=self.V)
 
         self.assertEqual(XS.shape, (self.nT, self.nD))
         self.assertEqual(YS.shape, (self.nT, self.nO))
@@ -804,7 +785,7 @@ class TestEDH(unittest.TestCase):
         result2         = - 1/2 * self.P @ tf.linalg.inv( self.P + self.R + self.u )
 
         self.assertEqual(result.shape, (self.nD, self.nD))
-        self.assertTrue(np.allclose(result, result2, atol=1e-5))
+        self.assertTrue(np.allclose(result, result2, atol=1e-6))
 
     def test_eq11(self):
 
@@ -816,7 +797,7 @@ class TestEDH(unittest.TestCase):
         result2         = tf.linalg.matvec(self.I + 2*self.A, tf.linalg.matvec(M, self.Y) + tf.linalg.matvec(self.A, e1))
 
         self.assertEqual(result.shape, (self.nD,))
-        self.assertTrue(np.allclose(result, result2, atol=1e-5))
+        self.assertTrue(np.allclose(result, result2, atol=1e-6))
 
     def test_edh_linearize_ekf(self):
 
@@ -831,9 +812,9 @@ class TestEDH(unittest.TestCase):
         self.assertEqual(m_pred.shape, (self.nD,))
         self.assertEqual(P_pred.shape, (self.nD, self.nD))
 
-        self.assertTrue(np.allclose(eta, m2, atol=1e-5))
-        self.assertTrue(np.allclose(eta, m_pred, atol=1e-5))
-        self.assertTrue(np.allclose(P_pred, P2, atol=1e-5))
+        self.assertTrue(np.allclose(eta, m2, atol=1e-6))
+        self.assertTrue(np.allclose(eta, m_pred, atol=1e-6))
+        self.assertTrue(np.allclose(P_pred, P2, atol=1e-6))
 
     def test_edh_linearize_ukf(self):
 
@@ -852,9 +833,9 @@ class TestEDH(unittest.TestCase):
         self.assertEqual(P_pred.shape, (self.nD, self.nD))
 
         self.assertTrue(tf.reduce_all(tf.math.is_finite(eta0)))
-        self.assertTrue(np.allclose(eta, m2, atol=1e-5))
-        self.assertTrue(np.allclose(eta, m_pred, atol=1e-5))
-        self.assertTrue(np.allclose(P_pred, P2, atol=1e-5))
+        self.assertTrue(np.allclose(eta, m2, atol=1e-6))
+        self.assertTrue(np.allclose(eta, m_pred, atol=1e-6))
+        self.assertTrue(np.allclose(P_pred, P2, atol=1e-6))
 
     def test_edh_flow_dynamics(self):
 
@@ -875,8 +856,8 @@ class TestEDH(unittest.TestCase):
         self.assertEqual(res0.shape, (self.Np, self.nD))
         self.assertEqual(res.shape, (self.nD,))
 
-        self.assertTrue(np.allclose(res, Res2, atol=1e-5))
-        self.assertTrue(np.allclose(res0, Res02, atol=1e-5))
+        self.assertTrue(np.allclose(res, Res2, atol=1e-6))
+        self.assertTrue(np.allclose(res0, Res02, atol=1e-6))
 
     def test_edh_flow_lp(self):
 
@@ -889,7 +870,7 @@ class TestEDH(unittest.TestCase):
         
         self.assertEqual(Lp.shape, (self.Np,))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(Lp)))
-        self.assertTrue(np.allclose(Lp, LogP, atol=1e-5))
+        self.assertTrue(np.allclose(Lp, LogP, atol=1e-6))
 
     def test_edh(self):
         
@@ -1121,8 +1102,8 @@ class TestLEDH(unittest.TestCase):
         self.assertEqual(res0.shape, (self.Np, self.nD))
         self.assertEqual(res.shape, (self.Np, self.nD))
         self.assertEqual(resp.shape, (self.Np,))
-        self.assertTrue(np.allclose(res, Res2, atol=1e-5))
-        self.assertTrue(np.allclose(res0, Res02, atol=1e-5))
+        self.assertTrue(np.allclose(res, Res2, atol=1e-6))
+        self.assertTrue(np.allclose(res0, Res02, atol=1e-6))
         
     def test_ledh_flow_lp(self):
         
@@ -1138,7 +1119,7 @@ class TestLEDH(unittest.TestCase):
         
         self.assertEqual(Lp.shape, (self.Np,))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(Lp)))
-        self.assertTrue(np.allclose(Lp, LogP, atol=1e-5))
+        self.assertTrue(np.allclose(Lp, LogP, atol=1e-6))
         
     def test_ledh(self):
         
@@ -1228,10 +1209,10 @@ class TestKernelPFF(unittest.TestCase):
 
     def setUp(self):
         
-        self.Np         = 10
         self.nD         = 3
         self.nO         = self.nD - 1
         self.nT         = 5
+        self.Np         = 10
 
         self.Xprev      = tf.random.normal((self.nD,), dtype=tf.float64)
         self.Y          = tf.random.normal((self.nO,), dtype=tf.float64)
@@ -1414,6 +1395,139 @@ class TestKernelPFF(unittest.TestCase):
         self.assertTrue(tf.reduce_all(tf.math.is_finite(xPart4)))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(xPartp4)))
 
+
+class TestSDE(unittest.TestCase):
+    
+    def setUp(self):
+        
+        self.Np         = 10
+        self.nD         = 3
+        self.nT         = 5
+
+        self.X          = tf.random.normal((self.nD,), dtype=tf.float64)
+        self.Y          = tf.random.normal((self.nD,), dtype=tf.float64)
+       
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.99, 0.99, dtype=tf.float64))
+        self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
+        self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
+        self.W          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
+
+        self.u          = tf.eye(self.nD, dtype=tf.float64) * 1e-9
+        
+        self.mu0        = tf.zeros((self.nD,), dtype=tf.float64)
+        self.Sigma0     = (self.V @ self.V) @ tf.linalg.inv(tf.eye(self.nD, dtype=tf.float64) - self.A @ self.A) 
+        
+        self.b          = 0.5
+        self.m          = 0.1  
+        self.I          = tf.eye(self.nD, dtype=tf.float64)
+        
+        self.JLP        = tf.random.uniform((self.nD,), -2.0, 2.0, dtype=tf.float64)
+        self.JLL        = tf.random.uniform((self.nD,), -2.0, 2.0, dtype=tf.float64)
+        self.HLP        = - tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
+        self.HLL        = - tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
+        
+        self.args       = (self.m, self.HLP, self.HLL, self.u)
+        self.M          = - (self.HLP + self.b * self.HLL)
+        self.Q          = tf.eye(self.nD, dtype=tf.float64) * 0.04
+        
+    def test_eq28(self):
+        M_inv           = tf.linalg.inv(self.M + self.u)
+        db2             = Dai22eq28([0,1], self.b, self.args)
+        expected_db2    = - self.m * ( tf.linalg.trace(self.HLL) * tf.linalg.trace(M_inv) + tf.linalg.trace(self.M) * tf.linalg.trace(M_inv @ self.HLL @ M_inv))
+        
+        self.assertTrue(isinstance(db2, tf.Tensor))
+        self.assertTrue(np.allclose(db2.numpy(), expected_db2.numpy(), atol=1e-6))
+    
+    def test_solv_ivp(self): 
+        L               = tf.linspace(0.0,1.0,10)
+        sols            = final_solve(L, self.m, self.HLP, self.HLL, self.u)
+        
+        self.assertTrue(isinstance(sols, tf.Tensor))
+        self.assertEqual(sols.shape, (10,))
+        
+        self.assertTrue(np.allclose(sols[0], 0.0, atol=1e-3))
+        # self.assertTrue(np.allclose(sols[-1], 1.0, atol=1e-3))
+        
+    def test_eq22(self):
+        M2, F, k        = Dai22eq22(self.b, self.m, self.HLP, self.HLL, self.Q, self.u)
+        expected_k      = tf.linalg.trace(self.M) * tf.linalg.trace(tf.linalg.inv(self.M + self.u))
+        db              = tf.math.sqrt(2 * self.m * expected_k)
+        expected_F      = 1/2 * self.Q @ (-self.M) - db/2 * tf.linalg.inv(-self.M-self.u) @ self.HLL
+        
+        self.assertTrue(isinstance(M2, tf.Tensor))
+        self.assertTrue(isinstance(F, tf.Tensor))
+        self.assertEqual(M2.shape, (self.nD,self.nD))     
+        self.assertEqual(F.shape, (self.nD,self.nD))
+        self.assertTrue(np.allclose(M2, self.M, atol=1e-6))
+        self.assertTrue(np.allclose(F, expected_F, atol=1e-6))
+        self.assertAlmostEqual(k, expected_k, places=6)
+        
+    def test_stiff(self):
+        _, F, _         = Dai22eq22(self.b, self.m, self.HLP, self.HLL, self.Q, self.u)
+        sr              = stiffness_ratio(F)
+        eigens          = tf.constant(tf.math.real(tf.linalg.eigvals(F)), dtype=tf.float64)
+        expected_sr     = tf.reduce_max(eigens) / tf.reduce_min(eigens)
+        
+        self.assertAlmostEqual(sr, expected_sr, places=6)
+        
+    def test_JacobiHessian(self):
+        J               = JacobiLogNormal(self.X, self.mu0, self.Sigma0, self.u)
+        H               = HessianLogNormal(self.Sigma0, self.u)
+        expected_J      = - tf.linalg.matvec(tf.linalg.inv(self.Sigma0 + self.u), (self.X - self.mu0))
+        expected_H      = - tf.linalg.inv(self.Sigma0 + self.u)
+        
+        self.assertTrue(isinstance(J, tf.Tensor))
+        self.assertTrue(isinstance(H, tf.Tensor))     
+        self.assertEqual(J.shape, (self.nD,))     
+        self.assertEqual(H.shape, (self.nD,self.nD))
+        self.assertTrue(np.allclose(J, expected_J, atol=1e-6))
+        self.assertTrue(np.allclose(H, expected_H, atol=1e-6))
+        
+    def test_eq11eq12(self): 
+        K1, K2          = Dai22eq11eq12(self.M, self.HLL, self.Q, self.u)
+        M_inv           = tf.linalg.inv(- self.M - self.u)
+        expected_K1     = self.Q/2 + 1/2 * M_inv @ self.HLL @ M_inv 
+        expected_K2     = - M_inv
+        
+        self.assertTrue(isinstance(K1, tf.Tensor))
+        self.assertTrue(isinstance(K2, tf.Tensor))        
+        self.assertEqual(K1.shape, (self.nD,self.nD))     
+        self.assertEqual(K2.shape, (self.nD,self.nD))
+        self.assertTrue(np.allclose(K1, expected_K1, atol=1e-6))
+        self.assertTrue(np.allclose(K2, expected_K2, atol=1e-6))
+        
+    def test_drift(self):
+        K1, K2          = Dai22eq11eq12(self.M, self.HLL, self.Q, self.u)
+        f               = drift_f(K1, K2, self.JLP, self.JLL)
+        expected_f      = tf.linalg.matvec(K1, self.JLP) + tf.linalg.matvec(K2, self.JLL)
+        
+        self.assertTrue(isinstance(f, tf.Tensor))
+        self.assertEqual(f.shape, (self.nD,))
+        self.assertTrue(np.allclose(f, expected_f, atol=1e-6))
+        
+    def test_sde_flow(self):
+        particles       = initiate_particles(self.Np, self.nD, self.mu0, self.Sigma0)
+        K1, K2          = Dai22eq11eq12(self.M, self.HLL, self.Q, self.u)
+        sde             = sde_flow_dynamics("LG", self.nD, self.Np, self.X, particles, self.Y, self.mu0, self.Sigma0, self.mu0, self.W, self.B, self.b, K1, K2, self.m, self.mu0, self.I, self.Q, self.u)
+        
+        self.assertEqual(sde.shape, (self.Np, self.nD))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(sde)))
+        
+    def test_sde(self): 
+        _, Y2            = SSM(self.nT, self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
+        Xf, cond, stiff  = SDE(Y2, A=self.A, B=self.B, V=self.V, W=self.W, N=self.Np, mu0=self.mu0, Sigma0=self.Sigma0) 
+        
+        self.assertEqual(Xf.shape, (self.nT,self.nD))
+        self.assertEqual(cond.shape, (self.nT,30))
+        self.assertEqual(stiff.shape, (self.nT,30))
+        
+        self.assertTrue(isinstance(Xf, tf.Variable)) 
+        self.assertTrue(isinstance(cond, tf.Variable)) 
+        self.assertTrue(isinstance(stiff, tf.Variable)) 
+        
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(Xf)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(cond)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(stiff)))
         
 if __name__ == '__main__':
     unittest.main()

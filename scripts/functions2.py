@@ -1,39 +1,188 @@
 import os
-
-# path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
-# path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/scripts/"
-# import sys
-# os.chdir(path)
-# cwd = os.getcwd()
-# sys.path.append(cwd)
-
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 
 from scipy.integrate import solve_ivp
+from scipy.optimize import fsolve 
+
 from .model import norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
+from .functions import initiate_particles
+
+
+# ta = tf.TensorArray(tf.float64, size=0, dynamic_size=True, clear_after_read=False)
+# for i in range(2):
+#     ta = ta.write(i, tf.ones(2, dtype=tf.float64))
 
 ############################
 # Stochastic Particle Flow # 
 ############################
 
-def Dai22eq28(mu):
-    return 
+def Dai22eq28(Lambda_span, beta, args):
+    """Compute and return the anti-derivatives of the conditioning number given by negative Hessian, M, over the interval, Lambda_span, using equation (28) in Dai et al. (2022)."""
+    mu, HessianLogPrior, HessianLogLikelihood, U = args
+    M                = - (HessianLogPrior + beta * HessianLogLikelihood) 
+    M_inv            = tf.linalg.inv(M + U)
+    db2_dL2          = - mu * ( tf.linalg.trace(HessianLogLikelihood) * tf.linalg.trace(M_inv) + tf.linalg.trace(M) * tf.linalg.trace(M_inv @ HessianLogLikelihood @ M_inv) )
+    return db2_dL2
 
-# 1. Define the ODE function
-# The function should accept (t, y) and return a list/array of derivatives
-def vdp1(t, y):
-    # y[0] is the position, y[1] is the velocity
-    # Equations:
-    # dy[0]/dt = y[1]
-    # dy[1]/dt = (1 - y[0]**2) * y[1] - y[0]
-    return [y[1], (1 - y[0]**2) * y[1] - y[0]]
+def initial_solve_err(b0, args):
+    """Compute the error of the boundary condition beta(1) = 1 at the initial condition beta(0) = 0 for the ODE solver."""
+    sol              = solve_ivp(Dai22eq28, t_span=[0,1], y0=b0, args=(args,))
+    return tf.constant([sol.y[0,-1] - 1], dtype=tf.float64) 
+ 
+def final_solve(Lambda, mu, HessianLogPrior, HessianLogLikelihood, U): 
+    """Solve the ODE system for beta sepcified by Dai22eq28 over the input interval, Lambdas, given the parameters."""
+    args            = (mu, HessianLogPrior, HessianLogLikelihood, U)
+    root, _, status, _ = fsolve(initial_solve_err, [1e-9], args=(args,), full_output=True)
+    sol             = solve_ivp(Dai22eq28, [0,1], y0=root, args=(args,), t_eval=Lambda) 
+    return tf.constant(sol.y[0], dtype=tf.float64)
+    
+def Dai22eq22(beta, mu, HessianLogPrior, HessianLogLikelihood, Q, U):
+    """Compute and return the negative Hessian matrix, Jacobian matrix and stiffness, M, F, and kappa, using equation (22) in Dai et al. (2022)."""
+    M               = - (HessianLogPrior + beta * HessianLogLikelihood) 
+    kappa           = tf.linalg.trace(M) * tf.linalg.trace(tf.linalg.inv(M + U))
+    d_beta          = tf.math.sqrt(2 * mu * kappa)
+    F               = 1/2 * Q @ (-M) - d_beta/2 * tf.linalg.inv(-M - U) @ HessianLogLikelihood 
+    return M, F, kappa
 
-# 2. Define the time span and initial conditions
-t_span = [0, 20] # Integrate from t=0 to t=20
-y0 = [2, 0]      # Initial conditions for [position, velocity]
+def stiffness_ratio(F):
+    """Compute and return the stiffness ratio using the Jacobian matrix F."""
+    ei              = tf.constant(tf.math.real(tf.linalg.eigvals(F)), dtype=tf.float64)
+    Ratio           = tf.reduce_max(ei) / tf.reduce_min(ei)
+    return Ratio
 
-# 3. Solve the ODE
-sol = solve_ivp(vdp1, t_span, y0)
+def JacobiLogNormal(x, mu, P, U):
+    """Compute and return the Jacobian of the log of a Normal distribution."""
+    return - tf.linalg.matvec(tf.linalg.inv(P + U), (x - mu))
+
+def HessianLogNormal(P, U):
+    """Compute and return the Hessian of the log of a Normal distribution."""
+    return - tf.linalg.inv(P + U) 
+
+def Dai22eq11eq12(M, HessianLogLikelihood, Q, U):
+    """Compute and return constant terms, K1 and K2, specified by equations (11) and (12) of Dai et al. (2022)."""
+    M_inv           = tf.linalg.inv(-M-U)
+    K1              = Q/2 + 1/2 * M_inv @ HessianLogLikelihood @ M_inv 
+    K2              = - M_inv
+    return K1, K2
+
+def drift_f(K1, K2, JacobiLogP, JacobiLogLikelihood):
+    """Compute and return the drift function specified by equation (10) of Dai et al. (2022)."""
+    f               = tf.linalg.matvec(K1, JacobiLogP) + tf.linalg.matvec(K2, JacobiLogLikelihood)
+    return f
+
+def sde_flow_dynamics(model, ndims, N, xhat, x, y, mx, SigmaX, my, SigmaY, B, beta, K1, K2, dL, w0, wI, q, U):
+    """Compute and return the flow dynamics of the particles using the SDE."""
+    dx              = tf.Variable(tf.zeros((N,ndims), dtype=tf.float64))     
+    for i in range(N):        
+        
+        gx          = measurements_pred(model, ndims, my, B, x[i], SigmaY, U)
+        JLL         = JacobiLogNormal(y, gx, SigmaY, U)
+        JLP         = (1.0 - beta) * JacobiLogNormal(x[i], mx, SigmaX, U) + beta * JacobiLogNormal(x[i], xhat, SigmaX, U) 
+        f           = drift_f(K1, K2, JLP, JLL)
+        
+        dw          = norm_rvs(ndims, w0, wI) 
+        dxi         = f * dL + tf.linalg.matvec(q, dw) 
+        dx[i].assign( dxi )
+        
+    return dx
+
+def SDE(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, Sigma0=None, muy=None, mc=None, Q=None):
+    """
+    Compute the estimated states using the SDE given the measurements. 
+
+    Keyword args:
+    -------------
+    y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by SSM. 
+    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
+    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    Nstep : int32, optional. Number of steps. Defaults to 30 if not provided.
+    N : int32, optional. Number of particles. Defaults to 1000 if not provided.
+    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariances if not provided.
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
+    
+    Returns:
+    --------
+    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the SDE. 
+    """
+    
+    nTimes, ndims   = y.shape     
+    
+    model           = "LG" if model is None else model
+    if model == "sensor" and ndims != 2:
+        raise ValueError("The state space dimension must be 2 for the location sensoring model.")
+        
+    if model == "SV" and A is None: 
+        A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
+    elif model == "SV" and A is not None:
+        if tf.reduce_max(A) > 1.0 or tf.reduce_min(A) < -1.0:
+            raise ValueError("The matrix A out of range [-1,1].")
+    if model != "SV" and A is None: 
+        A           = tf.eye(ndims, dtype=tf.float64) 
+    
+    B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
+    V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
+    W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
+    
+    if model == "sensor" and mu0 is None:
+        mu0         = tf.constant([3.0,5.0], dtype=tf.float64) 
+    else:
+        mu0         = tf.zeros((ndims,), dtype=tf.float64)     
+        
+    if model == "SV" and Sigma0 is None :
+        Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
+    elif model != "SV" and Sigma0 is None: 
+        Sigma0      = V
+        
+    muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
+    
+    mc              = 0.2 if mc is None else mc
+    Q               = tf.eye(ndims, dtype=tf.float64) if Q is None else Q
+    q               = tf.linalg.cholesky(Q)
+    w0              = tf.zeros((ndims,), dtype=tf.float64)
+    I               = tf.eye(ndims, dtype=tf.float64)
+    
+    N               = 1000 if N is None else N
+    Np              = N
+    Nstep           = 30 if Nstep is None else Nstep
+    Rates           = tf.constant([tf.linspace(0.0, 1.0, Nstep + 1).numpy()], dtype=tf.float64)
+    u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
+    
+    X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
+    stiffness       = tf.Variable(tf.zeros((nTimes, Nstep), dtype=tf.float64))
+    cond_num        = tf.Variable(tf.zeros((nTimes, Nstep), dtype=tf.float64))
+    
+    Hess_LLike      = HessianLogNormal(W, u)
+    Hess_Lprior     = HessianLogNormal(Sigma0, u)
+    x_filt          = tf.Variable(mu0, dtype=tf.float64)
+    
+    for i in range(nTimes):
+    
+        x_prev          = initiate_particles(Np, ndims, x_filt, Sigma0)
+        
+        for j in range(1,Nstep+1):
+            
+            Lamb        = Rates[:,j]
+            dL          = Rates[:,j] - Rates[:,j-1]
+        
+            beta        = final_solve(Lamb, mc, Hess_Lprior, Hess_LLike, u)
+            M, F, k     = Dai22eq22(beta, mc, Hess_Lprior, Hess_LLike, Q, u)
+            sr          = stiffness_ratio(F)
+            K1, K2      = Dai22eq11eq12(M, Hess_LLike, Q, u)
+            
+            cond_num[i,j-1].assign(k) 
+            stiffness[i,j-1].assign(sr)
+        
+            wI          = dL * I
+            dx          = sde_flow_dynamics(model, ndims, N, x_filt, x_prev, y[i], mu0, Sigma0, muy, W, B, beta, K1, K2, dL, w0, wI, q, u)
+            x_prev.assign_add(dx)
+            
+        x_filt          = tf.reduce_mean(x_prev, axis=0)
+        X_filtered[i,:].assign(x_filt)
+        
+    return X_filtered, cond_num, stiffness
