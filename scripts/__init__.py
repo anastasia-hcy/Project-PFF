@@ -1,5 +1,5 @@
 from .model import SE_kernel, SE_kernel_divC, SE_Cov_div
-from .model import norm_rvs, LG_Jacobi
+from .model import initiate_particles, norm_rvs, LG_Jacobi
 from .model import SV_transform, SV_Jacobi, SV_measurements
 from .model import sensor_transform, sensor_Jacobi, sensor_measurements
 from .model import measurements, measurements_Jacobi, measurements_pred, measurements_covyHat
@@ -9,7 +9,7 @@ from .functions import KF_Predict, KF_Gain, KF_Filter, KalmanFilter
 from .functions import EKF_Predict, EKF_Gain, EKF_Filter, ExtendedKalmanFilter
 from .functions import SigmaWeights, SigmaPoints, UKF_Propagate, UKF_Predict_mean, UKF_Predict_cov, UKF_Predict_crosscov, UKF_Predict, UKF_Gain, UKF_Filter, UnscentedKalmanFilter
 
-from .functions import initiate_particles, draw_particles, LogImportance, LogLikelihood, LogTarget, compute_weights, normalize_weights, compute_ESS, multinomial_resample, compute_posterior
+from .functions import draw_particles, LogImportance, LogLikelihood, LogTarget, compute_weights, normalize_weights, compute_ESS, multinomial_resample, compute_posterior
 from .functions import ParticleFilter
 
 from .functions import Li17eq10, Li17eq11
@@ -18,6 +18,9 @@ from .functions import LEDH_linearize_EKF, LEDH_linearize_UKF, LEDH_flow_dynamic
 from .functions import Hu21eq13, Hu21eq15, KPFF_LP, KPFF_RKHS, KPFF_flow, KernelPFF
 
 from .functions2 import Dai22eq28, initial_solve_err, final_solve, Dai22eq22, stiffness_ratio, JacobiLogNormal, HessianLogNormal, Dai22eq11eq12, drift_f, sde_flow_dynamics, SDE
+from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
+
+from .functions2 import soft_resample
 
 # Define package-level variables
 # __version__ = "1.0.0"
@@ -42,7 +45,10 @@ __all__ = ["SE_kernel", "SE_kernel_divC", "SE_Cov_div",
            "LEDH_linearize_EKF", "LEDH_linearize_UKF", "LEDH_flow_dynamics", "LEDH_flow_lp", "LEDH", 
            "Hu21eq13", "Hu21eq15", "KPFF_LP", "KPFF_RKHS", "KPFF_flow", "KernelPFF",
            
-           "Dai22eq28", "initial_solve_err", "final_solve", "Dai22eq22", "stiffness_ratio", "JacobiLogNormal", "HessianLogNormal", "Dai22eq11eq12", "drift_f", "sde_flow_dynamics", "SDE"]
+           "Dai22eq28", "initial_solve_err", "final_solve", "Dai22eq22", "stiffness_ratio", "JacobiLogNormal", "HessianLogNormal", "Dai22eq11eq12", "drift_f", "sde_flow_dynamics", "SDE",
+           "LEDH_SDE_Hessians", "LEDH_SDE_flow_dynamics", 
+           
+           "soft_resample"]
 
 
 

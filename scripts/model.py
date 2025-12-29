@@ -76,6 +76,13 @@ def norm_rvs(n, mean, Sigma):
     x               = tf.linalg.matvec(chol, x_par) + mean
     return x
 
+def initiate_particles(N, n, mu0, Sigma0):
+    """Draw and return a set of initial particles from the importance distribution."""
+    x0              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
+    for i in range(N):  
+        x0[i,:].assign( norm_rvs(n, mu0, Sigma0) )
+    return x0 
+
 ######################################
 #  Linear Gaussian State Space Model # 
 ######################################
@@ -185,7 +192,7 @@ def measurements_pred(model, n, m, B, x, W, U=None):
     
 def measurements_covyHat(model, Jw, W):
     """Compute and return the (pseudo-estimate) covariance matrix of the specified model."""
-    if model == "LG" or model == "sensor": 
+    if model != "SV": 
         return W
     if model == "SV" :
         return Jw @ W @ tf.transpose(Jw) 

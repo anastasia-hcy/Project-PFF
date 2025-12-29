@@ -2,12 +2,12 @@
 # Set directory #
 #################
 
-path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
-pathdat             = "C:/Users/anastasia/MyProjects/JPMorgan/data/"
-pathfig             = "C:/Users/anastasia/MyProjects/JPMorgan/Docs/"
+# path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
+# pathdat             = "C:/Users/anastasia/MyProjects/JPMorgan/data/"
+# pathfig             = "C:/Users/anastasia/MyProjects/JPMorgan/Docs/"
 
-# path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/"
-# pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/data/"
+path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/"
+pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/data/"
 
 import os, sys
 os.chdir(path)
@@ -45,6 +45,8 @@ def get_current_process_ram_usage():
 
 get_current_process_ram_usage()
 
+# with open(pathdat+"bg_try.pkl", 'rb') as file:
+#     data = pkl.load(file)
 
 ##################### 
 # Simulate datasets #
@@ -83,20 +85,6 @@ Simulate sparse data
 # X_sparse, Y_sparse    = SSM(nT, nX, model="SV", n_sparse=Ny, A=A_sparse, B=B_sparse, V=Cx_sparse)
 # X1_sparse, Y1_sparse  = SSM(nT, nX, n_sparse=Ny,  B=B_sparse)
 
-"""
-Save simulated data
-"""
-
-# dat = {'LG_States': X1, 'LG_Obs': Y1, 
-#        'SV_States': X, 'SV_Obs': Y, 
-#        'A': A, 'Cx': Cx, 
-#        'sparse_LG_States': X1_sparse, 'sparse_LG_Obs': Y1_sparse,
-#        'sparse_States': X_sparse, 'sparse_Obs': Y_sparse, 
-#        'sparse_A': A_sparse, 'sparse_B': B_sparse, 'sparse_Cx': Cx_sparse}
-# with open(pathdat+"data_sim.pkl", 'wb') as file:
-#     pkl.dump(dat, file)    
-
-
 
 """
 Load simulated data
@@ -117,6 +105,19 @@ Y_sparse        = data['sparse_Obs']
 A_sparse        = data['sparse_A']
 B_sparse        = data['sparse_B']
 Cx_sparse       = data['sparse_Cx']
+
+"""
+Save simulated data
+"""
+
+# dat = {'LG_States': X1, 'LG_Obs': Y1, 
+#        'SV_States': X, 'SV_Obs': Y, 
+#        'A': A, 'Cx': Cx, 
+#        'sparse_LG_States': X1_sparse, 'sparse_LG_Obs': Y1_sparse,
+#        'sparse_States': X_sparse, 'sparse_Obs': Y_sparse, 
+#        'sparse_A': A_sparse, 'sparse_B': B_sparse, 'sparse_Cx': Cx_sparse}
+# with open(pathdat+"data_sim.pkl", 'wb') as file:
+#     pkl.dump(dat, file)    
 
 
 """
@@ -567,32 +568,32 @@ plt.show()
 # SDE #    
 #######
 
-# from scripts import SDE 
+from scripts import SDE 
 Np              = 50
 
 """
 SDE - LG 
 """
-# X_SDE_1, Cond_SDE_1, stiff_SDE_1, beta_SDE_1 = SDE(Y1, N=Np)
+X_SDE_1, Cond_SDE_1, stiff_SDE_1, beta_SDE_1 = SDE(Y1, N=Np)
 # X_SDE_linear_1, Cond_SDE_linear_1, stiff_SDE_linear_1, beta_SDE_linear_1 = SDE(Y1, N=Np, homotopy=False)
 
 """
 SDE - SV
 """
 
-# start_cpu_time  = time.process_time()
-# initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+start_cpu_time  = time.process_time()
+initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-# X_SDE, Cond_SDE, stiff_SDE, beta_SDE = SDE(Y, model="SV", N=Np)
+X_SDE, Cond_SDE, stiff_SDE, beta_SDE = SDE(Y, model="SV", N=Np)
 
-# final_rss       = psutil.Process(os.getpid()).memory_info().rss
-# memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+final_rss       = psutil.Process(os.getpid()).memory_info().rss
+memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
 
-# end_cpu_time    = time.process_time()
-# cpu_time_taken  = end_cpu_time - start_cpu_time
+end_cpu_time    = time.process_time()
+cpu_time_taken  = end_cpu_time - start_cpu_time
 
-# print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
-# print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
+print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
+print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
 
 
 # start_cpu_time  = time.process_time()
@@ -613,34 +614,23 @@ SDE - SV
 SDE - Results
 """
 
-# with open(pathdat+"res_SDE.pkl", "wb") as file:
-#     pkl.dump({"res": X_SDE, 
-#               "cond": Cond_SDE,
-#               "stiff": stiff_SDE,
-#               "beta": beta_SDE,
-#               "cpu": [cpu_time_taken, memory_increase_mib], 
+with open(pathdat+"res_SDE.pkl", "wb") as file:
+    pkl.dump({"res": X_SDE, 
+              "cond": Cond_SDE,
+              "stiff": stiff_SDE,
+              "beta": beta_SDE,
+              "cpu": [cpu_time_taken, memory_increase_mib], 
 
-#               "res_testLG": X_SDE_1, 
-#               "cond_testLG": Cond_SDE_1,
-#               "stiff_testLG": stiff_SDE_1,
-#               "beta_testLG": beta_SDE_1}, file)
+              "res_testLG": X_SDE_1, 
+              "cond_testLG": Cond_SDE_1,
+              "stiff_testLG": stiff_SDE_1,
+              "beta_testLG": beta_SDE_1}, file)
 
-with open(pathdat+"res_SDE.pkl", 'rb') as file:
-    res_SDE = pkl.load(file)
+# with open(pathdat+"res_SDE.pkl", 'rb') as file:
+#     res_SDE = pkl.load(file)
 
-X_SDE           = res_SDE['res']
-Cond_SDE        = res_SDE['cond']
-stiff_SDE       = res_SDE['stiff']
-beta_SDE        = res_SDE['beta']
-
-
-with open(pathdat+"res_SDE_LG.pkl", 'rb') as file:
-    res_SDE = pkl.load(file)
-
-X_SDE_1         = res_SDE['res']
-Cond_SDE_1      = res_SDE['cond']
-stiff_SDE_1     = res_SDE['stiff']
-beta_SDE_1      = res_SDE['beta']
+# X_SDE           = res_SDE['res']
+# X_SDE_1         = res_SDE['res']
 
 for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75) 

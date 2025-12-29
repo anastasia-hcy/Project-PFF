@@ -4,7 +4,8 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 
-from .model import norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
+from .model import initiate_particles, norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
+from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics, soft_resample
 
 ##########################
 # Standard Kalman Filter # 
@@ -100,13 +101,14 @@ def ExtendedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=None
     Keyword args:
     -------------
     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-    model: string, optional. The name of the non-linear non-Gaussian measurement model. Defaults to stochastic volatility "SV" if not provided. 
+    model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided. 
     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
     
     Returns:
     --------
@@ -255,7 +257,7 @@ def UnscentedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=Non
     Keyword args:
     -------------
     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-    model: string, optional. The name of the non-linear non-Gaussian measurement model. Defaults to stochastic volatility "SV" if not provided. 
+    model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
@@ -337,18 +339,9 @@ def UnscentedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=Non
     return X_filtered
 
 
-
-#################################
-# Functions for Particle Filter # 
-#################################
-
-
-def initiate_particles(N, n, mu0, Sigma0):
-    """Draw and return a set of initial particles from the importance distribution."""
-    x0              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
-    for i in range(N):  
-        x0[i,:].assign( norm_rvs(n, mu0, Sigma0) )
-    return x0 
+################### 
+# Particle Filter # 
+################### 
 
 def LogImportance(x, mu0, Sigma0):
     """Compute and return the log probability of the state vector, x, using the importance distribution given the mean, mu0, and the covariance, Sigma0."""
@@ -406,30 +399,24 @@ def compute_posterior(w, x):
     return tf.linalg.matvec( tf.transpose(x), w ) 
 
 
-
-############################
-# Standard Particle Filter # 
-############################
-
-
-def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sigma0=None, muy=None):
+def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, multi_resample=True, soft_resample=False, Lamb=None, mu0=None, Sigma0=None, muy=None):
     """
     Compute the estimated states using the standard Particle Filter given the measurements. 
 
     Keyword args:
     -------------
     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-    model: string, optional. The name of the non-linear non-Gaussian measurement model. Defaults to stochastic volatility "SV" if not provided. 
+    model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
     N : int32, optional. Defaults to 1000 if not provided.
-    resample : Bool, optional. Defaults to True if not provided. 
+    resample : Bool, optional. The choice to perform resampling. Defaults to True. 
     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
-    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
-
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
+    
     Returns:
     --------
     X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the standard Particle Filter. 
@@ -470,9 +457,8 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         Sigma0      = V
         
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
-    
+    Lamb            = 0.5 if Lamb is None else Lamb
     N               = 1000 if N is None else N
-    resample        = True if resample is None else resample
     NT              = N/2
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
     I               = tf.ones((ndims,), dtype=tf.float64)
@@ -499,11 +485,12 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         ness        = compute_ESS(w_norm)
         ESS[i].assign(ness)
         
-        if resample == True and ness < NT: 
+        if multi_resample and ness < NT: 
             xbar, wbar  = multinomial_resample(N, x_pred, w_norm)
             x_filt      = compute_posterior(wbar, xbar)
             x_prev      = xbar
-        else: 
+        elif soft_resample and ness < NT:
+            xbar, wbar  = soft_resample(N, x_pred, w_norm, Lamb) 
             x_filt      = compute_posterior(w_norm, x_pred)
             x_prev      = x_pred
 
@@ -585,18 +572,18 @@ def EDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
     Keyword args:
     -------------
     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-    model: string, optional. The name of the non-linear non-Gaussian measurement model. Defaults to stochastic volatility "SV" if not provided. 
+    model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
     N : int32, optional. Number of particles. Defaults to 1000 if not provided.
-    Nstep : int32, optional. Number of steps. Defaults to 30 if not provided.
+    Nstep : int32, optional. Number of steps in the psuedo time interval [0,1]. Defaults to 30 if not provided.
     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
-    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
     method : str, optional. The linearization method. Defaults to "EKF" if not provided.  
-    stepsize : float64, optional. The stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
+    stepsize : float64, optional. The first stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
     
     Returns:
     --------
@@ -647,7 +634,8 @@ def EDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
     method          = "EKF" if method is None else method 
     stepsize        = 1e-3 if stepsize is None else stepsize     
     Nstep           = 30 if Nstep is None else Nstep
-    Rates           = [stepsize] + [stepsize * (1.2*i) for i in range(1,Nstep)]
+    Steps           = tf.constant([stepsize * (1.2*i) for i in range(Nstep+1)], dtype=tf.float64)
+    Rates           = tf.math.cumsum(Steps) 
     
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
     I               = tf.eye(ndims, dtype=tf.float64)
@@ -676,7 +664,7 @@ def EDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
                 x_pred0[:ndims].assign(m_pred)
                 P_pred0[ndims:ndims*2,ndims:ndims*2].assign(W)     
                 P_pred0[0:ndims,0:ndims].assign(P_pred)
-            if model == "LG": 
+            else: 
                 x_pred0                 = m_pred 
                 P_pred0                 = P_pred 
             
@@ -694,14 +682,12 @@ def EDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
 
         el                              = y_pred - tf.linalg.matvec(H, m_pred) 
         eta1                            = eta0
-        Lamb                            = stepsize
-        for j in range(Nstep): 
-            eta1_move, eta_move         = EDH_flow_dynamics(Np, ndims, Lamb, Rates[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
-            Lamb += Rates[j]
+        for j in range(1,Nstep+1): 
+            eta1_move, eta_move         = EDH_flow_dynamics(Np, ndims, Rates[j], Steps[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
             eta.assign_add(eta_move)
             eta1.assign_add(eta1_move)
             
-        lp                              = EDH_flow_lp(Np, eta0, eta1, x_prev, y[i,:], P_pred, muy, R, u)     
+        lp                              = EDH_flow_lp(Np, eta0, eta1, x_prev, y[i,:], P_pred, y_pred, R, u)     
         w_pred                          = compute_weights(w_prev, lp)
         w_norm                          = normalize_weights(w_pred)        
         ness                            = compute_ESS(w_norm)
@@ -859,27 +845,28 @@ def LEDH_flow_lp(N, eta0, theta, eta1, xprev, y, SigmaX, muy, SigmaY, U):
     """Compute and return the log posterior of the migrated pseudo particles."""
     Lp              = tf.Variable(tf.zeros((N,), dtype=tf.float64)) 
     for i in range(N):  
-        Lp[i].assign( tf.math.log(theta[i]) + LogLikelihood(y, muy, SigmaY[i,:,:], U) + LogTarget(eta1[i,:], xprev[i,:], SigmaX[i,:,:]) - LogImportance(eta0[i,:], xprev[i,:], SigmaX[i,:,:]) )  
+        Lp[i].assign( tf.math.log(theta[i]) + LogLikelihood(y, muy[i,:], SigmaY[i,:,:], U) + LogTarget(eta1[i,:], xprev[i,:], SigmaX[i,:,:]) - LogImportance(eta0[i,:], xprev[i,:], SigmaX[i,:,:]) )  
     return Lp
 
-def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
+def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None, stochastic=False, mc=None, Q=None):
     """
     Compute the estimated states using the LEDH given the measurements. 
 
     Keyword args:
-    -------------
-    y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by SVSSM. 
+    ------------- 
+    y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
+    model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
-    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
-    Nstep : int32, optional. Number of steps. Defaults to 30 if not provided.
-    N : int32, optional. Defaults to 1000 if not provided.
+    W : tf.Tensor of float64 with shape (ndims,ndims), optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+    N : int32, optional. Number of particles. Defaults to 1000 if not provided.
+    Nstep : int32, optional. Number of steps in the psuedo time interval [0,1]. Defaults to 30 if not provided.
     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
-    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
+    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
     method : str, optional. The linearization method. Defaults to "EKF" if not provided.  
-    stepsize : float64, optional. The stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
+    stepsize : float64, optional. The first stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
     
     Returns:
     --------
@@ -894,7 +881,6 @@ def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=
     model           = "LG" if model is None else model
     if model == "sensor" and ndims != 2:
         raise ValueError("The state space dimension must be 2 for the location sensoring model.")
-        
     
     if model == "SV" and A is None : 
         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
@@ -919,29 +905,37 @@ def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=
         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
     if model != "SV" and Sigma0 is None: 
         Sigma0      = V
-    muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
 
-    N               = 1000 if N is None else N
+    muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
+    u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
+    I               = tf.eye(ndims, dtype=tf.float64)
+    I1              = tf.ones((ndims,), dtype=tf.float64)
+    weight0_m, weight0_c, weighti, L = SigmaWeights(ndims)
+
+    N               = 100 if N is None else N
     Np              = N
     NT              = N/2
-
-    weight0_m, weight0_c, weighti, L = SigmaWeights(ndims)
 
     method          = "EKF" if method is None else method     
     stepsize        = 1e-3 if stepsize is None else stepsize     
     Nstep           = 30 if Nstep is None else Nstep
-    Rates           = [stepsize] + [stepsize * (1.2*i) for i in range(1,Nstep)]
-    
-    u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
-    I               = tf.eye(ndims, dtype=tf.float64)
-    I1              = tf.ones((ndims,), dtype=tf.float64)
+
+    if stochastic: 
+        Rates       = tf.constant(tf.linspace(0.0, 1.0, Nstep + 1).numpy(), dtype=tf.float64)
+        mc          = 0.045 if mc is None else mc
+        Q           = tf.eye(ndims, dtype=tf.float64) if Q is None else Q
+        q           = tf.linalg.cholesky(Q)
+        w0          = tf.zeros((ndims,), dtype=tf.float64)
+        I           = tf.eye(ndims, dtype=tf.float64)
+    else:
+        Steps       = tf.constant([stepsize * (1.2*i) for i in range(Nstep+1)], dtype=tf.float64)
+        Rates       = tf.math.cumsum(Steps) 
 
     JacobiX         = tf.Variable(tf.zeros((nTimes, Np, ndims, ndims), dtype=tf.float64))
     JacobiW         = tf.Variable(tf.zeros((nTimes, Np, ndims, ndims), dtype=tf.float64))
-    
     Weights         = tf.Variable(tf.zeros((nTimes, Np), dtype=tf.float64))
-    X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
+    X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
 
     P0              = A @ Sigma0 @ tf.transpose(A) + V
     P_prev          = tf.Variable(tf.zeros((Np,ndims,ndims), dtype=tf.float64))
@@ -957,24 +951,30 @@ def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=
             eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, Rcross, el = LEDH_linearize_UKF(Np, ndims, model, I1, x_prev, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, u)
         if method == "EKF":            
             eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el = LEDH_linearize_EKF(Np, ndims, model, I1, x_prev, P_prev, A, B, V, W, muy, u)
+        if stochastic: 
+            HessiansPrios, HessiansLike, JacobiLike = LEDH_SDE_Hessians(Np, P_pred, y[i,:], y_pred, R, u)
         
         JacobiX[i,:,:,:].assign(H)
         JacobiW[i,:,:,:].assign(Hiw)
-        
+
         eta1        = eta0
         theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
-        Lamb        = stepsize
-        for j in range(Nstep): 
+        for j in range(1,Nstep+1): 
+
+            if stochastic: 
+                dL  = Rates[j] - Rates[j-1]
+                eta1_move, theta_prod = LEDH_SDE_flow_dynamics(Np, ndims, Rates[j], dL, eta0, eta1, x_prev, P_pred, HessiansPrios, HessiansLike, JacobiLike, mc, w0, I, Q, q, u)
+                theta2 = theta * theta_prod
+                eta1.assign_add(eta1_move)
+                theta.assign(theta2)
+            else:
+                eta1_move, eta_move, theta_prod = LEDH_flow_dynamics(Np, ndims, Rates[j], Steps[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)                   
+                theta2 = theta * theta_prod
+                eta.assign_add(eta_move)
+                eta1.assign_add(eta1_move)
+                theta.assign(theta2)
             
-            eta1_move, eta_move, theta_prod     = LEDH_flow_dynamics(Np, ndims, Lamb, Rates[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)     
-                     
-            Lamb += Rates[j]
-            eta.assign_add(eta_move)
-            eta1.assign_add(eta1_move)
-            theta2 = theta * theta_prod
-            theta.assign(theta2)
-            
-        lp          = LEDH_flow_lp(Np, eta0, theta, eta1, x_prev, y[i,:], P_pred, muy, R, u)       
+        lp          = LEDH_flow_lp(Np, eta0, theta, eta1, x_prev, y[i,:], P_pred, y_pred, R, u)       
         w_pred      = compute_weights(w_prev, lp)
         w_norm      = normalize_weights(w_pred)        
         ness        = compute_ESS(w_norm)
@@ -1056,24 +1056,25 @@ def KernelPFF(y, Nx, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=N
 
     Keyword args:
     -------------
-    y : tf.Variable of float64 with dimension (nTimes,ndims). The measurements generated by SVSSM. 
+    y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
+    Nx : int32. The dimension of the state. 
     A : tf.Tensor of float64 with shape (Nx,Nx), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
     B : tf.Tensor of float64 with shape (ndims,Nx), optional. The output matrix. Defaults to identity matrix if not provided.
     V : tf.Tensor of float64 with shape (Nx,Nx), optional. The system noise matrix. Defaults to identity matrix if not provided.
     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
-    N : int32, optional. Defaults to 1000 if not provided.
-    Nstep : int32, optional. Number of steps. Defaults to 30 if not provided.
+    N : int32, optional. Number of particles. Defaults to 1000 if not provided.
+    Nstep : int32, optional. Number of steps in the psuedo time interval [0,1]. Defaults to 30 if not provided.
     mu0 : tf.Tensor of float64 with shape (Nx,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
     Sigma0 : tf.Tensor of float64 with shape (Nx,Nx). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
     muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
-    method : str, optional. The linearization method. Defaults to "kernel" if not provided.  
+    method : str, optional. The linearization method. Defaults to "kernel" if not provided.
     stepsize : float64, optional. The stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
     
     Returns:
     --------
     X_filtered : tf.Variable of float64 with dimension (nTimes,Nx). The filtered states given by the Kernel PFF.
-    JacobiX : tf.Variable of float64 with dimension (nTimes,Nl,N,ndims,Nx). The pseudo Jacobian matrix with respect to the state. 
-    JacobiW : tf.Variable of float64 with dimension (nTimes,Nl,N,ndims,ndims). The pseudo Jacobian matrix with respect to the noise. 
+    JacobiX : tf.Variable of float64 with dimension (nTimes,Nstep,N,ndims,Nx). The pseudo Jacobian matrix with respect to the state. 
+    JacobiW : tf.Variable of float64 with dimension (nTimes,Nstep,N,ndims,ndims). The pseudo Jacobian matrix with respect to the noise. 
     X_part : tf.Variable of float64 with dimension (nTimes,N,Nx). The prior particles given by the Kernel PFF.
     X_part2 : tf.Variable of float64 with dimension (nTimes,N,Nx). The posterior particles given by the Kernel PFF.
     """
