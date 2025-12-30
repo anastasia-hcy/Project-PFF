@@ -58,16 +58,14 @@ def post_mean(mx, my, Cx, Cy, U):
     Cy_inv = tf.linalg.inv(Cy + U)
     return tf.linalg.matvec( tf.linalg.inv(Cx_inv + Cy_inv) , tf.linalg.matvec(Cx_inv, mx) + tf.linalg.matvec(Cy_inv, my) )
 
-
 def post_cov(Cx, Cy, U):
     Cx_inv = tf.linalg.inv(Cx + U)
     Cy_inv = tf.linalg.inv(Cy + U)
     return tf.linalg.inv(Cx_inv + Cy_inv) 
 
-
 def JacobiLogNormal(x, mu, P, U):
     """Compute and return the Jacobian of the log of a Normal distribution."""
-    return - tf.linalg.matvec(tf.linalg.inv(P + U), (x - mu))
+    return tf.linalg.matvec(tf.linalg.inv(P + U), (x - mu))
 
 def HessianLogNormal(P, U):
     """Compute and return the Hessian of the log of a Normal distribution."""
@@ -85,14 +83,10 @@ def drift_f(K1, K2, JacobiLogP, JacobiLogLikelihood):
     f               = tf.linalg.matvec(K1, JacobiLogP) + tf.linalg.matvec(K2, JacobiLogLikelihood)
     return f
 
-def sde_flow_dynamics(model, ndims, N, x, y, xhat, SigmaX, my, SigmaY, SigmaP, B, beta, K1, K2, dL, w0, wI, q, U):
+def sde_flow_dynamics(N, ndims, K1, K2, JLL,JLP, dL, w0, wI, q):
     """Compute and return the flow dynamics of the particles using the SDE."""
     dx              = tf.Variable(tf.zeros((N,ndims), dtype=tf.float64))     
     for i in range(N):        
-        gx          = measurements_pred(model, ndims, my, B, x[i,:], SigmaY, U)
-        mu_p        = post_mean(xhat, gx, SigmaX, SigmaY, U)
-        JLL         = JacobiLogNormal(y, gx, SigmaY, U)
-        JLP         = (1.0 - beta) * JacobiLogNormal(x[i,:], xhat, SigmaX, U) + beta * JacobiLogNormal(x[i,:], mu_p, SigmaP, U) 
         f           = drift_f(K1, K2, JLP, JLL)        
         dw          = norm_rvs(ndims, w0, dL * wI) 
         dx[i,:].assign( f * dL + tf.linalg.matvec(q, dw) )         
@@ -150,7 +144,7 @@ def SDE(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
         Sigma0      = V
         
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
-    mc              = 0.045 if mc is None else mc
+    mc              = 0.2 if mc is None else mc
     Q               = tf.eye(ndims, dtype=tf.float64) if Q is None else Q
     q               = tf.linalg.cholesky(Q)
     w0              = tf.zeros((ndims,), dtype=tf.float64)
@@ -165,6 +159,7 @@ def SDE(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
     CovPost         = post_cov(Sigma0, W, u)
     Hess_LLike      = HessianLogNormal(W, u)
     Hess_Lprior     = HessianLogNormal(Sigma0, u)
+    
     if linear:
         betas       = Rates[1:] 
     else:
@@ -176,10 +171,12 @@ def SDE(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
     stiffness       = tf.Variable(tf.zeros((Nstep,), dtype=tf.float64))
     K1s             = tf.Variable(tf.zeros((Nstep,ndims,ndims), dtype=tf.float64))
     K2s             = tf.Variable(tf.zeros((Nstep,ndims,ndims), dtype=tf.float64))
+    
     for j in range(Nstep): 
         M, F, k     = Dai22eq22(betas[j], mc, Hess_Lprior, Hess_LLike, Q, u)
         sr          = stiffness_ratio(F)
         K1, K2      = Dai22eq11eq12(M, Hess_LLike, Q, u)
+        
         Ms[j,:,:].assign(M)
         Fs[j,:,:].assign(F)
         cond_num[j].assign(k)
@@ -192,18 +189,29 @@ def SDE(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
     
     for i in range(nTimes):
         
-        x_prev          = initiate_particles(Np, ndims, x_filt, Sigma0)
-    
-        for j in range(1,Nstep+1):            
-            dL          = Rates[j] - Rates[j-1]           
-            dx          = sde_flow_dynamics(model, ndims, N, x_prev, y[i], x_filt, Sigma0, muy, W, CovPost, B, betas[j-1], K1, K2, dL, w0, I, q, u)
+        x_prev      = initiate_particles(Np, ndims, mu0, Sigma0)
+        
+        gx          = measurements_pred(model, ndims, muy, B, x_filt, W, u)
+        mu_p        = post_mean(mu0, gx, Sigma0, W, u)
+        JLL         = JacobiLogNormal(y[i,:], gx, W, u)
+        JL0         = JacobiLogNormal(x_filt, mu0, Sigma0, u)
+        JL1         = JacobiLogNormal(x_filt, mu_p, CovPost, u)
+        
+        for j in range(Nstep):      
+            JLP     = (1.0 - betas[j]) * JL0 + betas[j] * JL1  
+            dL      = Rates[j+1] - Rates[j]                   
+            dx      = sde_flow_dynamics(N, ndims, K1s[j,:,:], K2s[j,:,:], JLL, JLP, dL, w0, I, q)
             x_prev.assign_add(dx)
             
-        x_filt          = tf.reduce_mean(x_prev, axis=0)
+        x_filt      = tf.reduce_mean(x_prev, axis=0)
         X_filtered[i,:].assign(x_filt)
         
     return X_filtered, cond_num, stiffness, betas
 
+
+####################################
+# Stochastic Particle Flow in LEDH # 
+####################################
 
 def LEDH_SDE_Hessians(N, SigmaX, y, ypred, SigmaY, U):
     Jacob_LLike     = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
@@ -220,14 +228,13 @@ def LEDH_SDE_flow_dynamics(N, n, beta, dL, eta0, eta1, x, SigmaX, HessPrior, Hes
     deta            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))     
     prod            = tf.Variable(tf.zeros((N,), dtype=tf.float64))    
     for i in range(N):        
-        
         M, _, _     = Dai22eq22(beta, mc, HessPrior[i,:,:], HessLike[i,:,:], Q, U)
         K1, K2      = Dai22eq11eq12(M, HessLike[i,:,:], Q, U)
-        JLP         = (1.0 - beta) * JacobiLogNormal(eta0[i,:], x[i,:], SigmaX[i,:,:], U) + beta * JacobiLogNormal(eta1[i,:], x[i,:], SigmaX[i,:,:], U) 
+        JL0         = JacobiLogNormal(eta0[i,:], x[i,:], SigmaX[i,:,:], U)
+        JL1         = JacobiLogNormal(eta1[i,:], x[i,:], SigmaX[i,:,:], U) 
+        JLP         = (1.0 - beta) * JL0 + beta * JL1
         f           = drift_f(K1, K2, JLP, JacobLike[i,:])
-        
         dw          = norm_rvs(n, w0, dL * wI) 
-
         deta[i].assign(  f * dL + tf.linalg.matvec(q, dw) ) 
         prod[i].assign( tf.math.abs( dL * tf.math.reduce_prod(1 + f)) ) 
     return deta, prod
@@ -249,30 +256,18 @@ def soft_resample(N, x, w, Lamb):
     return xbar, wbar 
 
 
+
+
+
+
 ########################
 # OT resampling for PF # 
 ########################
 
-# def cost_matrix():
-#     return 
 
-
-# def OT(N):
-#     # Parameters
-#     n = 100
-#     a = np.ones((n,)) / n # uniform distribution on 100 points
-#     b = np.ones((n,)) / n # uniform distribution on 100 points
-
-#     # Cost matrix (e.g., squared Euclidean distance)
-#     x = np.arange(n, dtype=np.float64)
-#     y = np.arange(n, dtype=np.float64)
-#     C = (x[:, np.newaxis] - y[np.newaxis, :])**2
-#     C = C / C.max() # Normalize cost matrix for stability
-
-#     # Regularization term
-#     reg = 0.1
-
-#     # Compute the optimal transport matrix (Gamma) using Sinkhorn
-#     POT = ot.sinkhorn(a, b, C, reg)
-
-#     return POT
+def OT(a, b, u, v, reg):
+    """Compute and return the optimal transport matrix using the Sinkhorn algorithm"""
+    C = tf.tensordot(v, v, axes=0) + tf.tensordot(u, u, axes=0) - 2 * tf.tensordot(u, v, axes=0) 
+    C = C / tf.reduce_max(C)
+    POT = ot.sinkhorn(a, b, C, reg)
+    return POT

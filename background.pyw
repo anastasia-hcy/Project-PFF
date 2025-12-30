@@ -59,7 +59,7 @@ def background_task(y, N, path):
     start_cpu_time  = time.process_time()
     initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-    X_SDE_1, Cond_SDE_1, stiff_SDE_1, beta_SDE_1 = SDE(y, N=N)
+    X_SDE_1, Cond_SDE_1, stiff_SDE_1, beta_SDE_1 = SDE(y, N=N, linear=False)
     
     final_rss       = psutil.Process(os.getpid()).memory_info().rss
     memory_increase_mib_1 = (final_rss - initial_rss) / (1024 ** 2)
@@ -67,7 +67,7 @@ def background_task(y, N, path):
     end_cpu_time    = time.process_time()
     cpu_time_taken_1 = end_cpu_time - start_cpu_time    
     
-    with open(path+"res_SDE_LG.pkl", 'wb') as file:
+    with open(path+"res_SDE_LG_homo.pkl", 'wb') as file:
         pkl.dump({"res": X_SDE_1, 
                   "cond": Cond_SDE_1,
                   "stiff": stiff_SDE_1,
@@ -76,12 +76,12 @@ def background_task(y, N, path):
 
 
 
-def background_task2(y, N, A, V, path):
+def background_task2(y, N, A, C, path):
     
     start_cpu_time  = time.process_time()
     initial_rss     = psutil.Process(os.getpid()).memory_info().rss
     
-    X_SDE, Cond_SDE, stiff_SDE, beta_SDE = SDE(y, model="SV", N=N, A=A, V=V)
+    X_SDE, Cond_SDE, stiff_SDE, beta_SDE = SDE(y, model="SV", A=A, V=C, N=N, linear=False)
     
     final_rss       = psutil.Process(os.getpid()).memory_info().rss
     memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
@@ -89,7 +89,7 @@ def background_task2(y, N, A, V, path):
     end_cpu_time    = time.process_time()
     cpu_time_taken  = end_cpu_time - start_cpu_time    
     
-    with open(path+"res_SDE.pkl", 'wb') as file:
+    with open(path+"res_SDE_homo.pkl", 'wb') as file:
         pkl.dump({"res": X_SDE, 
                   "cond": Cond_SDE,
                   "stiff": stiff_SDE,
@@ -107,3 +107,4 @@ if __name__ == '__main__':
     
     p3 = multiprocessing.Process(target=background_task2, args=(Y, Np, A, Cx, pathdat,))
     p3.start()
+

@@ -175,6 +175,9 @@ plt.show()
 
 
 
+
+    
+    
 ########################## 
 # Standard Kalman Filter #
 ##########################
@@ -642,14 +645,34 @@ Cond_SDE_1      = res_SDE['cond']
 stiff_SDE_1     = res_SDE['stiff']
 beta_SDE_1      = res_SDE['beta']
 
+
+with open(pathdat+"res_SDE_homo.pkl", 'rb') as file:
+    res_SDE = pkl.load(file)
+
+X_SDE_homo       = res_SDE['res']
+Cond_SDE_homo   = res_SDE['cond']
+stiff_SDE_homo  = res_SDE['stiff']
+beta_SDE_homo   = res_SDE['beta']
+
+
+with open(pathdat+"res_SDE_LG_homo.pkl", 'rb') as file:
+    res_SDE = pkl.load(file)
+
+X_SDE_1_homo    = res_SDE['res']
+Cond_SDE_1_homo = res_SDE['cond']
+stiff_SDE_1_homo= res_SDE['stiff']
+beta_SDE_1_homo = res_SDE['beta']
+
 for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-plt.show() 
+    plt.plot(X_SDE_1_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.show() 
 
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.plot(X_SDE_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.show() 
     
 

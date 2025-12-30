@@ -723,7 +723,7 @@ class TestPF(unittest.TestCase):
         
         _, Y2                                = SSM(self.nT, self.nD, model="SV", A=self.A, B=self.B, V=self.V, W=self.W)
         X_filtered2, ESS2, Weights2, xPartsv2, xParts2v2    = ParticleFilter(y=Y2, model="SV", N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W)
-        X_filtered3, ESS3, Weights3, xPartsv3, xParts2v3    = ParticleFilter(y=Y2, model="SV", N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, soft_resample=True)
+        X_filtered3, ESS3, Weights3, xPartsv3, xParts2v3    = ParticleFilter(y=Y2, model="SV", N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, resample="Soft")
 
         self.assertEqual(X_filtered.shape, (self.nT, self.nD))
         self.assertEqual(ESS.shape, (self.nT,))
@@ -1543,7 +1543,7 @@ class TestSDE(unittest.TestCase):
     def test_JacobiHessian(self):
         J               = JacobiLogNormal(self.X, self.mu0, self.Sigma0, self.u)
         H               = HessianLogNormal(self.Sigma0, self.u)
-        expected_J      = - tf.linalg.matvec(tf.linalg.inv(self.Sigma0 + self.u), (self.X - self.mu0))
+        expected_J      = tf.linalg.matvec(tf.linalg.inv(self.Sigma0 + self.u), (self.X - self.mu0))
         expected_H      = - tf.linalg.inv(self.Sigma0 + self.u)
         
         self.assertTrue(isinstance(J, tf.Tensor))
@@ -1576,9 +1576,8 @@ class TestSDE(unittest.TestCase):
         self.assertTrue(np.allclose(f, expected_f, atol=1e-6))
         
     def test_sde_flow(self):
-        particles       = initiate_particles(self.Np, self.nD, self.mu0, self.Sigma0)
         K1, K2          = Dai22eq11eq12(self.M, self.HLL, self.Q, self.u)
-        sde             = sde_flow_dynamics("LG", self.nD, self.Np, particles, self.Y, self.mu0, self.Sigma0, self.mu0, self.W, self.Sigma0, self.B, self.b, K1, K2, self.m, self.mu0, self.I, self.Q, self.u)
+        sde             = sde_flow_dynamics(self.Np, self.nD, K1, K2, self.JLL, self.JLL, 0.01, self.mu0, self.I, self.q)
         
         self.assertEqual(sde.shape, (self.Np, self.nD))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(sde)))

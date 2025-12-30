@@ -17,7 +17,7 @@ from .functions import EDH_linearize_EKF, EDH_linearize_UKF, EDH_flow_dynamics, 
 from .functions import LEDH_linearize_EKF, LEDH_linearize_UKF, LEDH_flow_dynamics, LEDH_flow_lp, LEDH
 from .functions import Hu21eq13, Hu21eq15, KPFF_LP, KPFF_RKHS, KPFF_flow, KernelPFF
 
-from .functions2 import Dai22eq28, initial_solve_err, final_solve, Dai22eq22, stiffness_ratio, JacobiLogNormal, HessianLogNormal, Dai22eq11eq12, drift_f, sde_flow_dynamics, SDE
+from .functions2 import post_cov, post_mean, Dai22eq28, initial_solve_err, final_solve, Dai22eq22, stiffness_ratio, JacobiLogNormal, HessianLogNormal, Dai22eq11eq12, drift_f, sde_flow_dynamics, SDE
 from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
 
 from .functions2 import soft_resample
@@ -45,7 +45,7 @@ __all__ = ["SE_kernel", "SE_kernel_divC", "SE_Cov_div",
            "LEDH_linearize_EKF", "LEDH_linearize_UKF", "LEDH_flow_dynamics", "LEDH_flow_lp", "LEDH", 
            "Hu21eq13", "Hu21eq15", "KPFF_LP", "KPFF_RKHS", "KPFF_flow", "KernelPFF",
            
-           "Dai22eq28", "initial_solve_err", "final_solve", "Dai22eq22", "stiffness_ratio", "JacobiLogNormal", "HessianLogNormal", "Dai22eq11eq12", "drift_f", "sde_flow_dynamics", "SDE",
+           "post_cov", "post_mean", "Dai22eq28", "initial_solve_err", "final_solve", "Dai22eq22", "stiffness_ratio", "JacobiLogNormal", "HessianLogNormal", "Dai22eq11eq12", "drift_f", "sde_flow_dynamics", "SDE",
            "LEDH_SDE_Hessians", "LEDH_SDE_flow_dynamics", 
            
            "soft_resample"]

@@ -399,7 +399,7 @@ def compute_posterior(w, x):
     return tf.linalg.matvec( tf.transpose(x), w ) 
 
 
-def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, multi_resample=True, soft_resample=False, Lamb=None, mu0=None, Sigma0=None, muy=None):
+def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resample=None, Lamb=None, mu0=None, Sigma0=None, muy=None):
     """
     Compute the estimated states using the standard Particle Filter given the measurements. 
 
@@ -412,7 +412,7 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, multi_
     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
     N : int32, optional. Defaults to 1000 if not provided.
-    resample : Bool, optional. The choice to perform resampling. Defaults to True. 
+    resample : string, optional. The resampling scheme. Defaults to Multinomial. 
     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
     muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
@@ -457,6 +457,7 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, multi_
         Sigma0      = V
         
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
+    resample        = "Multinomial" if resample is None else resample
     Lamb            = 0.5 if Lamb is None else Lamb
     N               = 1000 if N is None else N
     NT              = N/2
@@ -485,11 +486,11 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, multi_
         ness        = compute_ESS(w_norm)
         ESS[i].assign(ness)
         
-        if multi_resample and ness < NT: 
+        if resample == "Multinomial" and ness < NT: 
             xbar, wbar  = multinomial_resample(N, x_pred, w_norm)
             x_filt      = compute_posterior(wbar, xbar)
             x_prev      = xbar
-        elif soft_resample and ness < NT:
+        elif resample == "Soft" and ness < NT:
             xbar, wbar  = soft_resample(N, x_pred, w_norm, Lamb) 
             x_filt      = compute_posterior(w_norm, x_pred)
             x_prev      = x_pred
@@ -922,7 +923,7 @@ def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=
 
     if stochastic: 
         Rates       = tf.constant(tf.linspace(0.0, 1.0, Nstep + 1).numpy(), dtype=tf.float64)
-        mc          = 0.045 if mc is None else mc
+        mc          = 0.1 if mc is None else mc
         Q           = tf.eye(ndims, dtype=tf.float64) if Q is None else Q
         q           = tf.linalg.cholesky(Q)
         w0          = tf.zeros((ndims,), dtype=tf.float64)
