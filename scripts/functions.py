@@ -3,9 +3,11 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
+tf.random.set_seed(123)
 
 from .model import initiate_particles, norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
-from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics, soft_resample
+from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
+from .functions2 import soft_resample, ot_resample
 
 ##########################
 # Standard Kalman Filter # 
@@ -399,7 +401,7 @@ def compute_posterior(w, x):
     return tf.linalg.matvec( tf.transpose(x), w ) 
 
 
-def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resample=None, Lamb=None, mu0=None, Sigma0=None, muy=None):
+def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resample=None,  mu0=None, Sigma0=None, muy=None):
     """
     Compute the estimated states using the standard Particle Filter given the measurements. 
 
@@ -458,7 +460,6 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
     resample        = "Multinomial" if resample is None else resample
-    Lamb            = 0.5 if Lamb is None else Lamb
     N               = 1000 if N is None else N
     NT              = N/2
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
@@ -490,10 +491,16 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
             xbar, wbar  = multinomial_resample(N, x_pred, w_norm)
             x_filt      = compute_posterior(wbar, xbar)
             x_prev      = xbar
+            
         elif resample == "Soft" and ness < NT:
-            xbar, wbar  = soft_resample(N, x_pred, w_norm, Lamb) 
+            xbar, wbar  = soft_resample(N, x_pred, w_norm) 
             x_filt      = compute_posterior(w_norm, x_pred)
             x_prev      = x_pred
+            
+        elif resample == "OT" and ness < NT:
+            xbar, wbar  = ot_resample(N, ndims, x_pred, w_norm) 
+            x_filt      = compute_posterior(wbar, xbar)
+            x_prev      = xbar
 
         X_part2[i,:,:].assign(x_prev)
         X_filtered[i,:].assign(x_filt)
@@ -943,6 +950,7 @@ def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=
     for i in range(Np):
         P_prev[i,:,:].assign(P0)
 
+    x_filt          = mu0
     x_prev          = initiate_particles(Np, ndims, mu0, P0)
     w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
 
@@ -952,19 +960,20 @@ def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=
             eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, Rcross, el = LEDH_linearize_UKF(Np, ndims, model, I1, x_prev, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, u)
         if method == "EKF":            
             eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el = LEDH_linearize_EKF(Np, ndims, model, I1, x_prev, P_prev, A, B, V, W, muy, u)
-        if stochastic: 
-            HessiansPrios, HessiansLike, JacobiLike = LEDH_SDE_Hessians(Np, P_pred, y[i,:], y_pred, R, u)
         
         JacobiX[i,:,:,:].assign(H)
         JacobiW[i,:,:,:].assign(Hiw)
-
+        
+        if stochastic: 
+            HessiansPrios, HessiansLike, JacobiLike = LEDH_SDE_Hessians(Np, P_pred, y[i,:], y_pred, R, u)
+        
         eta1        = eta0
         theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
         for j in range(1,Nstep+1): 
 
             if stochastic: 
                 dL  = Rates[j] - Rates[j-1]
-                eta1_move, theta_prod = LEDH_SDE_flow_dynamics(Np, ndims, Rates[j], dL, eta0, eta1, x_prev, P_pred, HessiansPrios, HessiansLike, JacobiLike, mc, w0, I, Q, q, u)
+                eta1_move, theta_prod = LEDH_SDE_flow_dynamics(Np, ndims, eta0, eta1, P_pred, y_pred, R, Rates[j], dL, HessiansPrios, HessiansLike, JacobiLike, mc, w0, I, Q, q, u)
                 theta2 = theta * theta_prod
                 eta1.assign_add(eta1_move)
                 theta.assign(theta2)

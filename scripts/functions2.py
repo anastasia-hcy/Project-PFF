@@ -3,6 +3,7 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
+tf.random.set_seed(123)
 
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve 
@@ -217,26 +218,30 @@ def LEDH_SDE_Hessians(N, SigmaX, y, ypred, SigmaY, U):
     Jacob_LLike     = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
     Hess_LLike      = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
     Hess_Lprior     = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
-    for i in range(N):             
+    for i in range(N):   
         Hess_LLike  = Hess_LLike.write(i, HessianLogNormal(SigmaY[i,:,:], U))
         Hess_Lprior = Hess_Lprior.write(i, HessianLogNormal(SigmaX[i,:,:], U))
         Jacob_LLike = Jacob_LLike.write(i, JacobiLogNormal(y, ypred[i,:], SigmaY[i,:,:], U))
     return Hess_Lprior.stack(), Hess_LLike.stack(), Jacob_LLike.stack()
 
-def LEDH_SDE_flow_dynamics(N, n, beta, dL, eta0, eta1, x, SigmaX, HessPrior, HessLike, JacobLike, mc, w0, wI, Q, q, U):
+def LEDH_SDE_flow_dynamics(N, n, eta0, eta1, SigmaX, ypred, SigmaY, beta, dL, HessPrior, HessLike, JacobLike, mc, w0, wI, Q, q, U):
     """Compute and return the flow dynamics of the pseudo particles for migration in LEDH using the SDE."""
     deta            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))     
     prod            = tf.Variable(tf.zeros((N,), dtype=tf.float64))    
     for i in range(N):        
         M, _, _     = Dai22eq22(beta, mc, HessPrior[i,:,:], HessLike[i,:,:], Q, U)
         K1, K2      = Dai22eq11eq12(M, HessLike[i,:,:], Q, U)
-        JL0         = JacobiLogNormal(eta0[i,:], x[i,:], SigmaX[i,:,:], U)
-        JL1         = JacobiLogNormal(eta1[i,:], x[i,:], SigmaX[i,:,:], U) 
-        JLP         = (1.0 - beta) * JL0 + beta * JL1
+        
+        JacobPrior  = JacobiLogNormal(eta1[i,:], eta0[i,:], SigmaX[i,:,:], U)
+        muPost      = post_mean(eta0[i,:], ypred[i,:], SigmaX[i,:,:], SigmaY[i,:,:], U)
+        covPost     = post_cov(SigmaX[i,:,:], SigmaY[i,:,:], U)
+        JacobPost   = JacobiLogNormal(eta1[i,:], muPost, covPost, U)
+        JLP         = (1.0 - beta) * JacobPrior + beta * JacobPost  
+          
         f           = drift_f(K1, K2, JLP, JacobLike[i,:])
         dw          = norm_rvs(n, w0, dL * wI) 
         deta[i].assign(  f * dL + tf.linalg.matvec(q, dw) ) 
-        prod[i].assign( tf.math.abs( dL * tf.math.reduce_prod(1 + f)) ) 
+        prod[i].assign( tf.math.abs(dL * tf.math.reduce_prod(1 + f)) ) 
     return deta, prod
 
 
@@ -246,8 +251,9 @@ def LEDH_SDE_flow_dynamics(N, n, beta, dL, eta0, eta1, x, SigmaX, HessPrior, Hes
 ##########################
 
 
-def soft_resample(N, x, w, Lamb):
+def soft_resample(N, x, w):
     """Resample from the set of particles, x, using the weights, w, as multinomial probabilities and return the new set of particles, xbar, and the new weights, wbar."""
+    Lamb            = tf.cast(tfd.Uniform().sample(), tf.float64)
     what            = Lamb * w + (1-Lamb) / N
     dist            = tfd.Categorical(probs=what)
     indices         = dist.sample(N)
@@ -256,18 +262,27 @@ def soft_resample(N, x, w, Lamb):
     return xbar, wbar 
 
 
-
-
-
-
 ########################
 # OT resampling for PF # 
 ########################
 
-
-def OT(a, b, u, v, reg):
+def OT_matrix(a, b, u, v, reg):
     """Compute and return the optimal transport matrix using the Sinkhorn algorithm"""
-    C = tf.tensordot(v, v, axes=0) + tf.tensordot(u, u, axes=0) - 2 * tf.tensordot(u, v, axes=0) 
-    C = C / tf.reduce_max(C)
-    POT = ot.sinkhorn(a, b, C, reg)
-    return POT
+    C               = tf.tensordot(u, u, axes=0) + tf.tensordot(v, v, axes=0) - 2 * tf.tensordot(u, v, axes=1)
+    C               = C / tf.reduce_max(C)
+    POT             = ot.sinkhorn(a.numpy(), b.numpy(), C.numpy(), reg)
+    return tf.constant(POT, dtype=tf.float64)
+
+def ot_resample(N, n, x, w, lamb=0.5, reg=0.01):
+    """Resample from the set of particles, x, using the weights, w, as multinomial probabilities and return the new set of particles, xbar, and the new weights, wbar."""
+    what            = lamb * w + (1-lamb) / N
+    xbar            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
+    for i in range(n):
+        POT             = OT_matrix(w, what, x[:,i], x[:,i], reg)
+        xbar[:,i].assign( tf.linalg.matvec(POT, x[:,i]) )
+    wbar            = w / what
+    return xbar, wbar
+
+
+
+

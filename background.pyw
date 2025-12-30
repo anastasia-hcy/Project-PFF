@@ -15,7 +15,7 @@ if os.path.exists(pythonw_path) and sys.executable != pythonw_path:
 
 import numpy as np
 import pickle as pkl 
-from scripts import norm_rvs, SDE
+from scripts import norm_rvs, SDE, LEDH
 
 import psutil
 import time
@@ -33,16 +33,18 @@ nX              = 10
 Ny              = nX - 2
 unobserved      = [3,7]
 observed        = [0,1,2,4,5,6,8,9]
-Np              = 50
+
+Np              = 100
 
 with open(pathdat+"data_sim.pkl", 'rb') as file:
     data        = pkl.load(file)    
 
-X1              = data['LG_States']
 Y1              = data['LG_Obs']
 Y               = data['SV_Obs']
 A               = data['A']
 Cx              = data['Cx']
+
+
 
 
 def background_task_trial(nTimes, ndims, x, C, path):
@@ -54,12 +56,15 @@ def background_task_trial(nTimes, ndims, x, C, path):
         pkl.dump({'res':res}, file)         
 
 
-def background_task(y, N, path):
+
+
+
+def background_task0_EKF(y, N, path):
     
     start_cpu_time  = time.process_time()
     initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-    X_SDE_1, Cond_SDE_1, stiff_SDE_1, beta_SDE_1 = SDE(y, N=N, linear=False)
+    X_LEDH_SDE_1, ess_LEDH_SDE_1, weights_LEDH_SDE_1, Jx_LEDH_SDE_1, Jw_LEDH_SDE_1 = LEDH(y, N=N, method='EKF', stochastic=True)
     
     final_rss       = psutil.Process(os.getpid()).memory_info().rss
     memory_increase_mib_1 = (final_rss - initial_rss) / (1024 ** 2)
@@ -67,21 +72,43 @@ def background_task(y, N, path):
     end_cpu_time    = time.process_time()
     cpu_time_taken_1 = end_cpu_time - start_cpu_time    
     
-    with open(path+"res_SDE_LG_homo.pkl", 'wb') as file:
-        pkl.dump({"res": X_SDE_1, 
-                  "cond": Cond_SDE_1,
-                  "stiff": stiff_SDE_1,
-                  "beta": beta_SDE_1, 
+    with open(path+"res_LEDH_SDE_EKF_LG.pkl", 'wb') as file:
+        pkl.dump({"res": X_LEDH_SDE_1, 
+                  "ess": ess_LEDH_SDE_1,
+                  "weights": weights_LEDH_SDE_1,
+                  "Jx": Jx_LEDH_SDE_1, 
+                  "Jw": Jw_LEDH_SDE_1,
                   "cpu": [cpu_time_taken_1, memory_increase_mib_1]}, file)
 
 
-
-def background_task2(y, N, A, C, path):
+def background_task0_UKF(y, N, path):
     
     start_cpu_time  = time.process_time()
     initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+    X_LEDH_SDE_1, ess_LEDH_SDE_1, weights_LEDH_SDE_1, Jx_LEDH_SDE_1, Jw_LEDH_SDE_1 = LEDH(y, N=N, method='UKF', stochastic=True)
     
-    X_SDE, Cond_SDE, stiff_SDE, beta_SDE = SDE(y, model="SV", A=A, V=C, N=N, linear=False)
+    final_rss       = psutil.Process(os.getpid()).memory_info().rss
+    memory_increase_mib_1 = (final_rss - initial_rss) / (1024 ** 2)
+
+    end_cpu_time    = time.process_time()
+    cpu_time_taken_1 = end_cpu_time - start_cpu_time    
+    
+    with open(path+"res_LEDH_SDE_UKF_LG.pkl", 'wb') as file:
+        pkl.dump({"res": X_LEDH_SDE_1, 
+                  "ess": ess_LEDH_SDE_1,
+                  "weights": weights_LEDH_SDE_1,
+                  "Jx": Jx_LEDH_SDE_1, 
+                  "Jw": Jw_LEDH_SDE_1,
+                  "cpu": [cpu_time_taken_1, memory_increase_mib_1]}, file)
+
+
+def background_task(y, N, V, path):
+    
+    start_cpu_time  = time.process_time()
+    initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+    X_LEDH_SDE_1, ess_LEDH_SDE_1, weights_LEDH_SDE_1, Jx_LEDH_SDE_1, Jw_LEDH_SDE_1 = LEDH(y, model="SV", N=N, V=V, method='EKF', stochastic=True)
     
     final_rss       = psutil.Process(os.getpid()).memory_info().rss
     memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
@@ -89,22 +116,55 @@ def background_task2(y, N, A, C, path):
     end_cpu_time    = time.process_time()
     cpu_time_taken  = end_cpu_time - start_cpu_time    
     
-    with open(path+"res_SDE_homo.pkl", 'wb') as file:
-        pkl.dump({"res": X_SDE, 
-                  "cond": Cond_SDE,
-                  "stiff": stiff_SDE,
-                  "beta": beta_SDE,
+    with open(path+"res_LEDH_SDE_EKF.pkl", 'wb') as file:
+        pkl.dump({"res": X_LEDH_SDE_1, 
+                  "ess": ess_LEDH_SDE_1,
+                  "weights": weights_LEDH_SDE_1,
+                  "Jx": Jx_LEDH_SDE_1, 
+                  "Jw": Jw_LEDH_SDE_1,
                   "cpu": [cpu_time_taken, memory_increase_mib]}, file)
+
+
+def background_task2(y, N, V, path):
+    
+    start_cpu_time  = time.process_time()
+    initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+    
+    X_LEDH_SDE_1, ess_LEDH_SDE_1, weights_LEDH_SDE_1, Jx_LEDH_SDE_1, Jw_LEDH_SDE_1 = LEDH(y, model="SV", N=N, V=V, method='UKF', stochastic=True)
+
+    final_rss       = psutil.Process(os.getpid()).memory_info().rss
+    memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+    end_cpu_time    = time.process_time()
+    cpu_time_taken  = end_cpu_time - start_cpu_time    
+    
+    with open(path+"res_LEDH_SDE_UKF.pkl", 'wb') as file:
+        pkl.dump({"res": X_LEDH_SDE_1, 
+                  "ess": ess_LEDH_SDE_1,
+                  "weights": weights_LEDH_SDE_1,
+                  "Jx": Jx_LEDH_SDE_1, 
+                  "Jw": Jw_LEDH_SDE_1,
+                  "cpu": [cpu_time_taken, memory_increase_mib]}, file)
+
+
 
 
 if __name__ == '__main__':
     
-    p = multiprocessing.Process(target=background_task_trial, args=(nT, nD, X1, Cx, pathdat,))
+    p = multiprocessing.Process(target=background_task_trial, args=(nT, nD, Y, Cx, pathdat,))
     p.start()
 
-    p2 = multiprocessing.Process(target=background_task, args=(Y1, Np, pathdat,))
+    p20 = multiprocessing.Process(target=background_task0_EKF, args=(Y1, Np, pathdat,))
+    p20.start()
+    
+    p30 = multiprocessing.Process(target=background_task0_UKF, args=(Y1, Np, pathdat,))
+    p30.start()
+
+    p2 = multiprocessing.Process(target=background_task, args=(Y, Np, Cx, pathdat,))
     p2.start()
     
-    p3 = multiprocessing.Process(target=background_task2, args=(Y, Np, A, Cx, pathdat,))
+    p3 = multiprocessing.Process(target=background_task2, args=(Y, Np, Cx, pathdat,))
     p3.start()
+
+
 

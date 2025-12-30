@@ -173,10 +173,6 @@ for i in unobserved:
 plt.tight_layout()
 plt.show()
 
-
-
-
-    
     
 ########################## 
 # Standard Kalman Filter #
@@ -331,8 +327,20 @@ plt.show()
 # Standard Particle Filter #
 ############################ 
 
-# from scripts import ParticleFilter
-# Np              = 100
+from scripts import ParticleFilter
+Np              = 100
+
+X_PF_OT_1, ess_PF_OT_1, weights_PF_OT_1, particles_PF_OT_1, particles2_PF_OT_1 = ParticleFilter(Y1, N=Np, resample="OT")
+X_PF_S_1, ess_PF_S_1, weights_PF_S_1, particles_PF_S_1, particles2_PF_S_1 = ParticleFilter(Y1, N=Np, resample="Soft")
+
+fig, ax = plt.subplots(figsize=(6,4))
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_PF_OT_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
+    plt.plot(X_PF_S_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
+plt.show() 
+
+
 
 """
 PF - LG
@@ -489,39 +497,6 @@ EDH - SV
 # print(f"Memory increase during code block: {memory_increase_mib_EKF:.3f} MiB")
 # print(f"CPU time taken: {cpu_time_taken_EKF:.3f} seconds")
 
-
-"""
-EDH - Results 
-"""
-
-# with open(pathdat+"res_EDH.pkl", "wb") as file:
-#     pkl.dump({"res": X_EDH, 
-#               "ess": ess_EDH,
-#               "weights": weights_EDH,
-#               "Jx": Jx_EDH,
-#               "Jw": Jw_EDH,
-#               "cpu": [cpu_time_taken, memory_increase_mib], 
-
-#               "res_EKF": X_EDH_EKF, 
-#               "ess_EKF": ess_EDH_EKF,
-#               "weights_EKF": weights_EDH_EKF,
-#               "Jx_EKF": Jx_EDH_EKF,
-#               "Jw_EKF": Jw_EDH_EKF,
-#               "cpu_EKF": [cpu_time_taken_EKF, memory_increase_mib_EKF], 
-
-#               "res_testLG": X_EDH_1, 
-#               "ess_testLG": ess_EDH_1,
-#               "weights_testLG": weights_EDH_1,
-#               "Jx_testLG": Jx_EDH_1,
-#               "Jw_testLG": Jw_EDH_1, 
-              
-#               "res_testLG_EKF": X_EDH_EKF_1, 
-#               "ess_testLG_EKF": ess_EDH_EKF_1,
-#               "weights_testLG_EKF": weights_EDH_EKF_1,
-#               "Jx_testLG_EKF": Jx_EDH_EKF_1,
-#               "Jw_testLG_EKF": Jw_EDH_EKF_1,}, file)
-
-
 with open(pathdat+"res_EDH.pkl", 'rb') as file:
     res_EDH = pkl.load(file)
     
@@ -570,63 +545,7 @@ plt.show()
 # SDE #    
 #######
 
-# from scripts import SDE 
 Np              = 50
-
-"""
-SDE - LG 
-"""
-# X_SDE_1, Cond_SDE_1, stiff_SDE_1, beta_SDE_1 = SDE(Y1, N=Np)
-# X_SDE_linear_1, Cond_SDE_linear_1, stiff_SDE_linear_1, beta_SDE_linear_1 = SDE(Y1, N=Np, homotopy=False)
-
-"""
-SDE - SV
-"""
-
-# start_cpu_time  = time.process_time()
-# initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-# X_SDE, Cond_SDE, stiff_SDE, beta_SDE = SDE(Y, model="SV", N=Np)
-
-# final_rss       = psutil.Process(os.getpid()).memory_info().rss
-# memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
-
-# end_cpu_time    = time.process_time()
-# cpu_time_taken  = end_cpu_time - start_cpu_time
-
-# print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
-# print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
-
-
-# start_cpu_time  = time.process_time()
-# initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-# X_SDE_linear, Cond_SDE_linear, stiff_SDE_linear, beta_SDE_linear = SDE(Y, model="SV", N=Np, homotopy=False)
-
-# final_rss       = psutil.Process(os.getpid()).memory_info().rss
-# memory_increase_mib_linear = (final_rss - initial_rss) / (1024 ** 2)
-
-# end_cpu_time    = time.process_time()
-# cpu_time_taken_linear  = end_cpu_time - start_cpu_time
-
-# print(f"Memory increase during code block: {memory_increase_mib_linear:.3f} MiB")
-# print(f"CPU time taken: {cpu_time_taken_linear:.3f} seconds")
-
-"""
-SDE - Results
-"""
-
-# with open(pathdat+"res_SDE.pkl", "wb") as file:
-#     pkl.dump({"res": X_SDE, 
-#               "cond": Cond_SDE,
-#               "stiff": stiff_SDE,
-#               "beta": beta_SDE,
-#               "cpu": [cpu_time_taken, memory_increase_mib], 
-
-#               "res_testLG": X_SDE_1, 
-#               "cond_testLG": Cond_SDE_1,
-#               "stiff_testLG": stiff_SDE_1,
-#               "beta_testLG": beta_SDE_1}, file)
 
 with open(pathdat+"res_SDE.pkl", 'rb') as file:
     res_SDE = pkl.load(file)
@@ -673,7 +592,7 @@ for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75) 
     plt.plot(X_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
     plt.plot(X_SDE_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.show() 
+plt.show() 
     
 
 
@@ -681,151 +600,7 @@ for i in range(nD):
 # LEDH #
 ########
 
-from scripts import LEDH
 Np = 100
-
-"""
-LEDH - LG 
-"""
-
-X_LEDH_EKF_1, ess_LEDH_EKF_1, weights_LEDH_EKF_1, Jx_LEDH_EKF_1, Jw_LEDH_EKF_1 = LEDH(Y1, N=Np, method='EKF')
-X_LEDH_1, ess_LEDH_1, weights_LEDH_1, Jx_LEDH_1, Jw_LEDH_1 = LEDH(Y1, N=Np, method='UKF')
-
-
-"""
-LEDH - SV 
-"""
-
-start_cpu_time  = time.process_time()
-initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-X_LEDH_EKF, ess_LEDH_EKF, weights_LEDH_EKF, Jx_LEDH_EKF, Jw_LEDH_EKF = LEDH(Y, V=Cx, model="SV", N=Np, method='EKF')
-
-final_rss       = psutil.Process(os.getpid()).memory_info().rss
-memory_increase_mib_EKF = (final_rss - initial_rss) / (1024 ** 2)
-
-end_cpu_time    = time.process_time()
-cpu_time_taken_EKF  = end_cpu_time - start_cpu_time
-
-print(f"Memory increase during code block: {memory_increase_mib_EKF:.3f} MiB")
-print(f"CPU time taken: {cpu_time_taken_EKF:.3f} seconds")
-
-
-start_cpu_time  = time.process_time()
-initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-X_LEDH, ess_LEDH, weights_LEDH, Jx_LEDH, Jw_LEDH = LEDH(Y, V=Cx, model="SV", N=Np, method='UKF')
-
-final_rss       = psutil.Process(os.getpid()).memory_info().rss
-memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
-
-end_cpu_time    = time.process_time()
-cpu_time_taken  = end_cpu_time - start_cpu_time
-
-print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
-print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
-
-
-
-"""
-LEDH/SDE - LG 
-"""
-
-X_LEDH_SDE_EKF_1, ess_LEDH_SDE_EKF_1, weights_LEDH_SDE_EKF_1, Jx_LEDH_SDE_EKF_1, Jw_LEDH_SDE_EKF_1 = LEDH(Y1, N=Np, method='EKF', stochastic=True)
-X_LEDH_SDE_1, ess_LEDH_SDE_1, weights_LEDH_SDE_1, Jx_LEDH_SDE_1, Jw_LEDH_SDE_1 = LEDH(Y1, N=Np, method='UKF', stochastic=True)
-
-
-"""
-LEDH/SDE - SV 
-"""
-
-start_cpu_time  = time.process_time()
-initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-X_LEDH_SDE_EKF, ess_LEDH_SDE_EKF, weights_LEDH_SDE_EKF, Jx_LEDH_SDE_EKF, Jw_LEDH_SDE_EKF = LEDH(Y, V=Cx, model="SV", N=Np, method='EKF', stochastic=True)
-
-final_rss       = psutil.Process(os.getpid()).memory_info().rss
-memory_increase_mib_SDE_EKF = (final_rss - initial_rss) / (1024 ** 2)
-
-end_cpu_time    = time.process_time()
-cpu_time_taken_SDE_EKF  = end_cpu_time - start_cpu_time
-
-print(f"Memory increase during code block: {memory_increase_mib_SDE_EKF:.3f} MiB")
-print(f"CPU time taken: {cpu_time_taken_SDE_EKF:.3f} seconds")
-
-
-start_cpu_time  = time.process_time()
-initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-X_LEDH_SDE, ess_LEDH_SDE, weights_LEDH_SDE, Jx_LEDH_SDE, Jw_LEDH_SDE = LEDH(Y, V=Cx, model="SV", N=Np, method='UKF', stochastic=True)
-
-final_rss       = psutil.Process(os.getpid()).memory_info().rss
-memory_increase_mib_SDE = (final_rss - initial_rss) / (1024 ** 2)
-
-end_cpu_time    = time.process_time()
-cpu_time_taken_SDE  = end_cpu_time - start_cpu_time
-
-print(f"Memory increase during code block: {memory_increase_mib_SDE:.3f} MiB")
-print(f"CPU time taken: {cpu_time_taken_SDE:.3f} seconds")
-
-
-"""
-LEDH - Results
-"""
-
-with open(pathdat+"res_LEDH.pkl", "wb") as file:
-    pkl.dump({"res": X_LEDH, 
-              "ess": ess_LEDH,
-              "weights": weights_LEDH,
-              "Jx": Jx_LEDH,
-              "Jw": Jw_LEDH,
-              "cpu": [cpu_time_taken, memory_increase_mib], 
-
-              "res_EKF": X_LEDH_EKF, 
-              "ess_EKF": ess_LEDH_EKF,
-              "weights_EKF": weights_LEDH_EKF,
-              "Jx_EKF": Jx_LEDH_EKF,
-              "Jw_EKF": Jw_LEDH_EKF,
-              "cpu_EKF": [cpu_time_taken_EKF, memory_increase_mib_EKF], 
-
-            #   "res_SDE": X_LEDH_SDE, 
-            #   "ess_SDE": ess_LEDH_SDE,
-            #   "weights_SDE": weights_LEDH_SDE,
-            #   "Jx_SDE": Jx_LEDH_SDE,
-            #   "Jw_SDE": Jw_LEDH_SDE,
-            #   "cpu_SDE": [cpu_time_taken_SDE, memory_increase_mib_SDE], 
-
-            #   "res_SDE_EKF": X_LEDH_SDE_EKF, 
-            #   "ess_SDE_EKF": ess_LEDH_SDE_EKF,
-            #   "weights_SDE_EKF": weights_LEDH_SDE_EKF,
-            #   "Jx_SDE_EKF": Jx_LEDH_SDE_EKF,
-            #   "Jw_SDE_EKF": Jw_LEDH_SDE_EKF,
-            #   "cpu_SDE_EKF": [cpu_time_taken_SDE_EKF, memory_increase_mib_SDE_EKF], 
-
-              "res_testLG": X_LEDH_1, 
-              "ess_testLG": ess_LEDH_1,
-              "weights_testLG": weights_LEDH_1,
-              "Jx_testLG": Jx_LEDH_1,
-              "Jw_testLG": Jw_LEDH_1, 
-              
-              "res_testLG_EKF": X_LEDH_EKF_1, 
-              "ess_testLG_EKF": ess_LEDH_EKF_1,
-              "weights_testLG_EKF": weights_LEDH_EKF_1,
-              "Jx_testLG_EKF": Jx_LEDH_EKF_1,
-              "Jw_testLG_EKF": Jw_LEDH_EKF_1
-
-            #   "res_testLG_SDE": X_LEDH_SDE_1, 
-            #   "ess_testLG_SDE": ess_LEDH_SDE_1,
-            #   "weights_testLG_SDE": weights_LEDH_SDE_1,
-            #   "Jx_testLG_SDE": Jx_LEDH_SDE_1,
-            #   "Jw_testLG_SDE": Jw_LEDH_SDE_1, 
-              
-            #   "res_testLG_SDE_EKF": X_LEDH_SDE_EKF_1, 
-            #   "ess_testLG_SDE_EKF": ess_LEDH_SDE_EKF_1,
-            #   "weights_testLG_SDE_EKF": weights_LEDH_SDE_EKF_1,
-            #   "Jx_testLG_SDE_EKF": Jx_LEDH_SDE_EKF_1,
-            #   "Jw_testLG_SDE_EKF": Jw_LEDH_SDE_EKF_1
-            }, file)
 
 
 with open(pathdat+"res_LEDH.pkl", 'rb') as file:
@@ -856,18 +631,66 @@ Jx_LEDH_EKF_1      = res_LEDH['Jx_testLG_EKF']
 Jw_LEDH_EKF_1      = res_LEDH['Jw_testLG_EKF']
 
 
+with open(pathdat+"res_LEDH_SDE_EKF_LG.pkl", 'rb') as file:
+    res_LEDH = pkl.load(file)
+    
+X_LEDH_SDE_EKF_1       = res_LEDH['res']
+ess_LEDH_SDE_EKF_1     = res_LEDH['ess']
+weights_LEDH_SDE_EKF_1 = res_LEDH['weights']
+Jx_LEDH_SDE_EKF_1      = res_LEDH['Jx']
+Jw_LEDH_SDE_EKF_1      = res_LEDH['Jw']
+
+with open(pathdat+"res_LEDH_SDE_UKF_LG.pkl", 'rb') as file:
+    res_LEDH = pkl.load(file)
+    
+X_LEDH_SDE_1       = res_LEDH['res']
+ess_LEDH_SDE_1     = res_LEDH['ess']
+weights_LEDH_EKF_1 = res_LEDH['weights']
+Jx_LEDH_SDE_1      = res_LEDH['Jx']
+Jw_LEDH_SDE_1      = res_LEDH['Jw']
+
+with open(pathdat+"res_LEDH_SDE_EKF.pkl", 'rb') as file:
+    res_LEDH = pkl.load(file)
+    
+X_LEDH_SDE_EKF       = res_LEDH['res']
+ess_LEDH_SDE_EKF     = res_LEDH['ess']
+weights_LEDH_SDE_EKF = res_LEDH['weights']
+Jx_LEDH_SDE_EKF      = res_LEDH['Jx']
+Jw_LEDH_SDE_EKF      = res_LEDH['Jw']
+
+with open(pathdat+"res_LEDH_SDE_UKF.pkl", 'rb') as file:
+    res_LEDH = pkl.load(file)
+    
+X_LEDH_SDE          = res_LEDH['res']
+ess_LEDH_SDE        = res_LEDH['ess']
+weights_LEDH_SDE    = res_LEDH['weights']
+Jx_LEDH_SDE         = res_LEDH['Jx']
+Jw_LEDH_SDE         = res_LEDH['Jw']
+
 
 for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.plot(X_LEDH_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
+    plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
+    plt.plot(X_LEDH_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
     plt.show() 
+
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_LEDH_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue')
+    plt.plot(X_LEDH_SDE_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='purple')
+plt.show() 
     
 
 for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
     plt.plot(X_LEDH_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
     plt.plot(X_LEDH_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
+plt.show() 
+
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_LEDH_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red')
+    plt.plot(X_LEDH_SDE_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange')
 plt.show() 
 
 
