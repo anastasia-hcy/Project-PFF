@@ -8,6 +8,7 @@ tf.random.set_seed(123)
 from .model import initiate_particles, norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
 from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
 from .functions2 import soft_resample, ot_resample
+from .functions2 import weights_backpropagation
 
 ##########################
 # Standard Kalman Filter # 
@@ -390,18 +391,17 @@ def compute_ESS(w):
 
 def multinomial_resample(N, x, w):
     """Resample from the set of particles, x, using the weights, w, as multinomial probabilities and return the new set of particles, xbar, and the new weights, wbar."""
-    dist            = tfd.Categorical(probs=w)
-    indices         = dist.sample(N)
+    indices         = tfd.Categorical(probs=w).sample(N)
     xbar            = tf.gather(x, indices)
     wbar            = tf.ones((N,), dtype=tf.float64) / N 
     return xbar, wbar 
 
 def compute_posterior(w, x):
-    "Compute and return the posterior estimates of the state using the weights, w, and the particles, x. "
+    """Compute and return the posterior estimates of the state using the weights, w, and the particles, x."""
     return tf.linalg.matvec( tf.transpose(x), w ) 
 
 
-def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resample=None,  mu0=None, Sigma0=None, muy=None):
+def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resample=None,  backpropagation=False, mu0=None, Sigma0=None, muy=None):
     """
     Compute the estimated states using the standard Particle Filter given the measurements. 
 
@@ -494,8 +494,8 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
             
         elif resample == "Soft" and ness < NT:
             xbar, wbar  = soft_resample(N, x_pred, w_norm) 
-            x_filt      = compute_posterior(w_norm, x_pred)
-            x_prev      = x_pred
+            x_filt      = compute_posterior(wbar, xbar)
+            x_prev      = xbar
             
         elif resample == "OT" and ness < NT:
             xbar, wbar  = ot_resample(N, ndims, x_pred, w_norm) 

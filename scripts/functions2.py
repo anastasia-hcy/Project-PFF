@@ -7,8 +7,10 @@ tf.random.set_seed(123)
 
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve 
-import ot
+from ot import sinkhorn
 
+import keras
+from keras import layers, Loss
 from .model import initiate_particles, norm_rvs, measurements_pred
 
 # ta = tf.TensorArray(tf.float64, size=0, dynamic_size=True, clear_after_read=False)
@@ -240,48 +242,84 @@ def LEDH_SDE_flow_dynamics(N, n, eta0, eta1, SigmaX, ypred, SigmaY, beta, dL, He
           
         f           = drift_f(K1, K2, JLP, JacobLike[i,:])
         dw          = norm_rvs(n, w0, dL * wI) 
-        deta[i].assign(  f * dL + tf.linalg.matvec(q, dw) ) 
+        
+        deta[i].assign( f * dL + tf.linalg.matvec(q, dw) ) 
         prod[i].assign( tf.math.abs(dL * tf.math.reduce_prod(1 + f)) ) 
-    return deta, prod
 
+    return deta, prod
 
 
 ##########################
 # Soft resampling for PF # 
 ##########################
 
+def LogSumExp(x):
+    """Compute and return the log-sum-exponential of the input tensor, x."""
+    c               = tf.reduce_max(x) 
+    return c + tf.math.log(tf.reduce_sum(tf.math.exp(x - c), axis=0))
 
 def soft_resample(N, x, w):
     """Resample from the set of particles, x, using the weights, w, as multinomial probabilities and return the new set of particles, xbar, and the new weights, wbar."""
     Lamb            = tf.cast(tfd.Uniform().sample(), tf.float64)
     what            = Lamb * w + (1-Lamb) / N
-    dist            = tfd.Categorical(probs=what)
-    indices         = dist.sample(N)
+    indices         = tfd.Categorical(probs=what).sample(N)
     xbar            = tf.gather(x, indices)
-    wbar            = w / what
-    return xbar, wbar 
+    wbar            = (w/what) / tf.reduce_sum(w/what) 
+    return xbar, wbar
+
+def weights_backpropagation():
+    """Compute and return the new weights using backpropagation through neural network."""
+    return 
+
+def particles_backpropagation():
+    """Compute and return the new particles using backpropagation through neural network."""
+    return 
+
 
 
 ########################
 # OT resampling for PF # 
 ########################
 
-def OT_matrix(a, b, u, v, reg):
+def OT_matrix(a, b, u, v, reg, ITER):
     """Compute and return the optimal transport matrix using the Sinkhorn algorithm"""
     C               = tf.tensordot(u, u, axes=0) + tf.tensordot(v, v, axes=0) - 2 * tf.tensordot(u, v, axes=1)
     C               = C / tf.reduce_max(C)
-    POT             = ot.sinkhorn(a.numpy(), b.numpy(), C.numpy(), reg)
+    POT             = sinkhorn(a.numpy(), b.numpy(), C.numpy(), reg=reg, numItermax=ITER)
     return tf.constant(POT, dtype=tf.float64)
 
-def ot_resample(N, n, x, w, lamb=0.5, reg=0.01):
+# def sinkhorn_algorithm(N, a, b, C, reg, numItermax=1000, stopThr=1e-6):
+#     K = tf.math.exp(- C / reg)
+#     u = tf.ones(N, dtype=tf.float64) / N
+#     v = tf.ones(N, dtype=tf.float64) / N
+#     for _ in range(numItermax):
+#         prev_u = u
+#         K1 = tf.linalg.matvec(K, v) + 1e-9
+#         u = (a / K1) 
+#         K2 = tf.linalg.matvec(tf.transpose(K), u) + 1e-9
+#         v = (b / K2) 
+#         err = tf.reduce_sum((u - prev_u)**2)
+#         if err < stopThr:
+#             break
+#     POT = tf.linalg.diag(u) @ K @ tf.linalg.diag(v) 
+#     return POT
+
+
+def ot_resample(N, n, x, w, reg=0.1, n_iter=1000):
     """Resample from the set of particles, x, using the weights, w, as multinomial probabilities and return the new set of particles, xbar, and the new weights, wbar."""
-    what            = lamb * w + (1-lamb) / N
+    Lamb            = tf.cast(tfd.Uniform().sample(), tf.float64)
+    what            = Lamb * w + (1-Lamb) / N
     xbar            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
     for i in range(n):
-        POT             = OT_matrix(w, what, x[:,i], x[:,i], reg)
+        POT             = OT_matrix(w, what, x[:,i], x[:,i], reg, n_iter)
         xbar[:,i].assign( tf.linalg.matvec(POT, x[:,i]) )
     wbar            = w / what
     return xbar, wbar
+
+
+
+
+
 
 
 

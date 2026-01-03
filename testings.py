@@ -3,7 +3,6 @@
 #################
 
 path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM"
-# path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/"
 
 import os, sys
 os.chdir(path)

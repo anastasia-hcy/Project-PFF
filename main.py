@@ -6,9 +6,6 @@ path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJ
 pathdat             = "C:/Users/anastasia/MyProjects/JPMorgan/data/"
 pathfig             = "C:/Users/anastasia/MyProjects/JPMorgan/Docs/"
 
-# path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/"
-# pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/data/"
-
 import os, sys
 os.chdir(path)
 cwd = os.getcwd()
@@ -330,17 +327,27 @@ plt.show()
 from scripts import ParticleFilter
 Np              = 100
 
-X_PF_OT_1, ess_PF_OT_1, weights_PF_OT_1, particles_PF_OT_1, particles2_PF_OT_1 = ParticleFilter(Y1, N=Np, resample="OT")
 X_PF_S_1, ess_PF_S_1, weights_PF_S_1, particles_PF_S_1, particles2_PF_S_1 = ParticleFilter(Y1, N=Np, resample="Soft")
+# X_PF_S2_1, ess_PF_S2_1, weights_PF_S2_1, particles_PF_S2_1, particles2_PF_S2_1 = ParticleFilter(Y1, N=Np, resample="Soft", backpropagation=True)
 
 fig, ax = plt.subplots(figsize=(6,4))
 for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_PF_OT_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
-    plt.plot(X_PF_S_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
+    plt.plot(X_PF1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
+    plt.plot(X_PF_S_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
+    # plt.plot(X_PF_S2_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
 plt.show() 
 
 
+X_PF_OT_1, ess_PF_OT_1, weights_PF_OT_1, particles_PF_OT_1, particles2_PF_OT_1 = ParticleFilter(Y1, N=Np, resample="OT")
+
+                  
+fig, ax = plt.subplots(figsize=(6,4))
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_PF_OT_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange')     
+plt.show() 
+                                                                                                                    
 
 """
 PF - LG
@@ -583,16 +590,16 @@ stiff_SDE_1_homo= res_SDE['stiff']
 beta_SDE_1_homo = res_SDE['beta']
 
 for i in range(nD):
-    plt.plot(X1[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.plot(X_SDE_1_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.show() 
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
+    plt.plot(X_SDE_1_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
+plt.show() 
 
 for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.plot(X_SDE_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-plt.show() 
+    plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
+    plt.plot(X_SDE_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
+    plt.show() 
     
 
 
@@ -672,7 +679,7 @@ for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
     plt.plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
     plt.plot(X_LEDH_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
-    plt.show() 
+plt.show() 
 
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
@@ -691,7 +698,7 @@ for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
     plt.plot(X_LEDH_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red')
     plt.plot(X_LEDH_SDE_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange')
-plt.show() 
+    plt.show() 
 
 
 fig, ax = plt.subplots(1,2, figsize=(12,4))
