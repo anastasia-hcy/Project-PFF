@@ -8,7 +8,6 @@ tf.random.set_seed(123)
 from .model import initiate_particles, norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
 from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
 from .functions2 import soft_resample, ot_resample
-from .functions2 import weights_backpropagation
 
 ##########################
 # Standard Kalman Filter # 
@@ -489,19 +488,23 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         
         if resample == "Multinomial" and ness < NT: 
             xbar, wbar  = multinomial_resample(N, x_pred, w_norm)
-            x_filt      = compute_posterior(wbar, xbar)
-            x_prev      = xbar
             
         elif resample == "Soft" and ness < NT:
             xbar, wbar  = soft_resample(N, x_pred, w_norm) 
-            x_filt      = compute_posterior(wbar, xbar)
-            x_prev      = xbar
             
         elif resample == "OT" and ness < NT:
-            xbar, wbar  = ot_resample(N, ndims, x_pred, w_norm) 
-            x_filt      = compute_posterior(wbar, xbar)
-            x_prev      = xbar
-
+            xbar, what  = ot_resample(N, ndims, x_pred, w_norm)
+            wbar        = normalize_weights(what)
+            
+        elif ness >= NT:
+            xbar        = x_pred
+            wbar        = w_norm
+        
+        # if backpropagation: 
+            
+        
+        x_filt      = compute_posterior(wbar, xbar)
+        x_prev      = xbar        
         X_part2[i,:,:].assign(x_prev)
         X_filtered[i,:].assign(x_filt)
 
@@ -567,8 +570,9 @@ def EDH_flow_dynamics(N, n, Lamb, epsilon, I, e, e0, P, H, R, er, y, U):
 def EDH_flow_lp(N, eta0, eta1, xprev, y, SigmaX, muy, SigmaY, U):
     """Compute and return the log posterior of the migrated pseudo particles."""
     Lp              = tf.Variable(tf.zeros((N,), dtype=tf.float64)) 
+    yLL             = LogLikelihood(y, muy, SigmaY, U)
     for i in range(N):  
-        Lp[i].assign( LogLikelihood(y, muy, SigmaY, U) + LogTarget(eta1[i,:], xprev[i,:], SigmaX) - LogImportance(eta0[i,:], xprev[i,:], SigmaX) )  
+        Lp[i].assign( yLL + LogTarget(eta1[i,:], xprev[i,:], SigmaX) - LogImportance(eta0[i,:], xprev[i,:], SigmaX) )  
     return Lp
 
 

@@ -264,7 +264,7 @@ def soft_resample(N, x, w):
     what            = Lamb * w + (1-Lamb) / N
     indices         = tfd.Categorical(probs=what).sample(N)
     xbar            = tf.gather(x, indices)
-    wbar            = (w/what) / tf.reduce_sum(w/what) 
+    wbar            = w / what
     return xbar, wbar
 
 def weights_backpropagation():
@@ -281,9 +281,10 @@ def particles_backpropagation():
 # OT resampling for PF # 
 ########################
 
-def OT_matrix(a, b, u, v, reg, ITER):
+def OT_matrix(a, b, u, reg, ITER):
     """Compute and return the optimal transport matrix using the Sinkhorn algorithm"""
-    C               = tf.tensordot(u, u, axes=0) + tf.tensordot(v, v, axes=0) - 2 * tf.tensordot(u, v, axes=1)
+    u_diff          = u[:, tf.newaxis, :] - u[tf.newaxis, :, :]
+    C               = tf.norm(u_diff, ord='euclidean', axis=-1)
     C               = C / tf.reduce_max(C)
     POT             = sinkhorn(a.numpy(), b.numpy(), C.numpy(), reg=reg, numItermax=ITER)
     return tf.constant(POT, dtype=tf.float64)
@@ -304,15 +305,32 @@ def OT_matrix(a, b, u, v, reg, ITER):
 #     POT = tf.linalg.diag(u) @ K @ tf.linalg.diag(v) 
 #     return POT
 
+def ot_cv_score(w, x, xpred, SigmaX_inv, SigmaX_det):
+    xdiff           = x - xpred
+    xSum            = - 1/2 * tf.reduce_sum(xdiff @ SigmaX_inv * xdiff, axis=-1)      
+    loglike         = w * ( SigmaX_det + LogSumExp(xSum) ) 
+    return tf.reduce_sum(loglike)
 
-def ot_resample(N, n, x, w, reg=0.1, n_iter=1000):
+def ot_grid(num_reg=50, num_iter=10):
+    x               = tf.cast(tf.linspace(1e-3, 1, num_reg), tf.float64)
+    y               = tf.cast(tf.linspace(100, 1000, num_iter), tf.int32)
+    return x, y
+
+def ot_cv(a, b, u, Sigma_inv, Sigma_det, grid, k=5):
+    reg             = grid[0]
+    niter           = grid[1]
+            
+    POT             = OT_matrix(a, b, u, reg, niter)
+    v               = POT @ u
+    score_k         = ot_cv_score(b, u, v, Sigma_inv, Sigma_det)
+    return 
+
+def ot_resample(N, x, w, reg=0.1, n_iter=1000):
     """Resample from the set of particles, x, using the weights, w, as multinomial probabilities and return the new set of particles, xbar, and the new weights, wbar."""
     Lamb            = tf.cast(tfd.Uniform().sample(), tf.float64)
     what            = Lamb * w + (1-Lamb) / N
-    xbar            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
-    for i in range(n):
-        POT             = OT_matrix(w, what, x[:,i], x[:,i], reg, n_iter)
-        xbar[:,i].assign( tf.linalg.matvec(POT, x[:,i]) )
+    POT             = OT_matrix(w, what, x, reg, n_iter)
+    xbar            = POT @ x
     wbar            = w / what
     return xbar, wbar
 

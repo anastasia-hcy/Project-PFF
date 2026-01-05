@@ -20,7 +20,7 @@ from .functions import Hu21eq13, Hu21eq15, KPFF_LP, KPFF_RKHS, KPFF_flow, Kernel
 from .functions2 import post_cov, post_mean, Dai22eq28, initial_solve_err, final_solve, Dai22eq22, stiffness_ratio, JacobiLogNormal, HessianLogNormal, Dai22eq11eq12, drift_f, sde_flow_dynamics, SDE
 from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
 
-from .functions2 import soft_resample, soft_weights_backpropagation, soft_weights_loss, LogSumExp, weightsBP_loss, weights_backpropagation
+from .functions2 import soft_resample, LogSumExp
 from .functions2 import OT_matrix, ot_resample
 
 # Define package-level variables
