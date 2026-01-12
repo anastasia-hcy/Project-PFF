@@ -482,11 +482,11 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         
         x_pred, lp  = draw_particles(N, ndims, model, I, y[i,:], x_prev, V, muy, W, Sigma0, B, u)
         w_pred      = compute_weights(w_prev, lp)
+        w_norm      = normalize_weights(w_pred) 
         
         X_part[i,:,:].assign(x_pred)
-        Weights[i,:].assign(w_pred)
+        Weights[i,:].assign(w_norm)
         
-        w_norm      = normalize_weights(w_pred) 
         ness        = compute_ESS(w_norm)
         ESS[i].assign(ness)
         
