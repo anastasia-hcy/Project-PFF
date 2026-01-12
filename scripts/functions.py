@@ -7,7 +7,8 @@ tf.random.set_seed(123)
 
 from .model import initiate_particles, norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
 from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
-from .functions2 import soft_resample, ot_resample
+from .functions2 import soft_resample, ot_resample, cost_matrix
+
 
 ##########################
 # Standard Kalman Filter # 
@@ -463,7 +464,11 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
     NT              = N/2
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
     I               = tf.ones((ndims,), dtype=tf.float64)
-
+    
+    if resample == "OT":
+        inds        = tf.reshape(tf.range(N, dtype=tf.float32), (-1,1))
+        C           = cost_matrix(inds,inds)
+        
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
     Weights         = tf.Variable(tf.zeros((nTimes,N), dtype=tf.float64))
@@ -476,13 +481,12 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
     for i in range(nTimes):
         
         x_pred, lp  = draw_particles(N, ndims, model, I, y[i,:], x_prev, V, muy, W, Sigma0, B, u)
-
         w_pred      = compute_weights(w_prev, lp)
-        w_norm      = normalize_weights(w_pred) 
         
-        Weights[i,:].assign(w_norm)
         X_part[i,:,:].assign(x_pred)
+        Weights[i,:].assign(w_pred)
         
+        w_norm      = normalize_weights(w_pred) 
         ness        = compute_ESS(w_norm)
         ESS[i].assign(ness)
         
@@ -490,10 +494,11 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
             xbar, wbar  = multinomial_resample(N, x_pred, w_norm)
             
         elif resample == "Soft" and ness < NT:
-            xbar, wbar  = soft_resample(N, x_pred, w_norm) 
-            
+            xbar, what  = soft_resample(N, x_pred, w_norm) 
+            wbar        = normalize_weights(what)
+        
         elif resample == "OT" and ness < NT:
-            xbar, what  = ot_resample(N, ndims, x_pred, w_norm)
+            xbar, what, pot = ot_resample(N, x_pred, w_norm, C)
             wbar        = normalize_weights(what)
             
         elif ness >= NT:
@@ -501,10 +506,10 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
             wbar        = w_norm
         
         # if backpropagation: 
-            
         
         x_filt      = compute_posterior(wbar, xbar)
         x_prev      = xbar        
+        w_prev      = wbar
         X_part2[i,:,:].assign(x_prev)
         X_filtered[i,:].assign(x_filt)
 
@@ -1000,9 +1005,11 @@ def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=
             xbar, wbar  = multinomial_resample(Np, eta1, w_norm)
             x_filt      = compute_posterior(wbar, xbar)
             x_prev      = xbar
+            w_prev      = wbar
         else: 
             x_filt      = compute_posterior(w_norm, eta1)
             x_prev      = eta1
+            w_prev      = w_norm
 
         X_filtered[i,:].assign(x_filt) 
         

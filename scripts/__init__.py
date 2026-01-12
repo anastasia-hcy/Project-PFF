@@ -21,7 +21,7 @@ from .functions2 import post_cov, post_mean, Dai22eq28, initial_solve_err, final
 from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
 
 from .functions2 import soft_resample, LogSumExp
-from .functions2 import OT_matrix, ot_resample
+from .functions2 import ot_resample, cost_matrix, OT_matrix
 
 # Define package-level variables
 # __version__ = "1.0.0"
@@ -49,8 +49,8 @@ __all__ = ["SE_kernel", "SE_kernel_divC", "SE_Cov_div",
            "post_cov", "post_mean", "Dai22eq28", "initial_solve_err", "final_solve", "Dai22eq22", "stiffness_ratio", "JacobiLogNormal", "HessianLogNormal", "Dai22eq11eq12", "drift_f", "sde_flow_dynamics", "SDE",
            "LEDH_SDE_Hessians", "LEDH_SDE_flow_dynamics", 
            
-           "soft_resample", "soft_weights_backpropagation", "soft_weights_loss", "LogSumExp", "weightsBP_loss", "weights_backpropagation",
-           "OT_matrix", "ot_resample"]
+           "LogSumExp", 
+           "soft_resample", "ot_resample", "cost_matrix", "OT_matrix"]
 
 
 

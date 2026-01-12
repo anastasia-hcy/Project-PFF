@@ -25,7 +25,6 @@ import time
 #########################
 
 pathdat             = "C:/Users/anastasia/MyProjects/JPMorgan/data/"
-# pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/data/"
 
 nT              = 100
 nD              = 4
@@ -51,7 +50,6 @@ def background_task_trial(nTimes, ndims, x, C, path):
     res = np.zeros((nTimes,ndims))
     for i in range(nTimes):
         res[i,:] = norm_rvs(ndims, x[i,:], C)
-        
     with open(path+"bg_try.pkl", 'wb') as file:
         pkl.dump({'res':res}, file)         
 
