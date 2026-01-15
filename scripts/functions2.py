@@ -7,12 +7,9 @@ tf.random.set_seed(123)
 
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve 
-from ot import sinkhorn, dist
-
-import keras
-from keras import layers, Loss
+from ot import sinkhorn
 from .model import initiate_particles, norm_rvs, measurements_pred
-optimizer = keras.optimizers.SGD(1e-3)
+
 
 # ta = tf.TensorArray(tf.float64, size=0, dynamic_size=True, clear_after_read=False)
 # for i in range(2):
@@ -89,9 +86,9 @@ def drift_f(K1, K2, JacobiLogP, JacobiLogLikelihood):
 
 def sde_flow_dynamics(N, ndims, K1, K2, JLL,JLP, dL, w0, wI, q):
     """Compute and return the flow dynamics of the particles using the SDE."""
-    dx              = tf.Variable(tf.zeros((N,ndims), dtype=tf.float64))     
+    dx              = tf.Variable(tf.zeros((N,ndims), dtype=tf.float64))    
+    f               = drift_f(K1, K2, JLP, JLL)         
     for i in range(N):        
-        f           = drift_f(K1, K2, JLP, JLL)        
         dw          = norm_rvs(ndims, w0, dL * wI) 
         dx[i,:].assign( f * dL + tf.linalg.matvec(q, dw) )         
     return dx
@@ -122,9 +119,6 @@ def SDE(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
     nTimes, ndims   = y.shape     
     
     model           = "LG" if model is None else model
-    if model == "sensor" and ndims != 2:
-        raise ValueError("The state space dimension must be 2 for the location sensoring model.")
-        
     if model == "SV" and A is None: 
         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
     elif model == "SV" and A is not None:
@@ -137,11 +131,7 @@ def SDE(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
     
-    if model == "sensor" and mu0 is None:
-        mu0         = tf.constant([3.0,5.0], dtype=tf.float64) 
-    else:
-        mu0         = tf.zeros((ndims,), dtype=tf.float64)     
-        
+    mu0             = tf.zeros((ndims,), dtype=tf.float64)         
     if model == "SV" and Sigma0 is None :
         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
     elif model != "SV" and Sigma0 is None: 
@@ -240,11 +230,11 @@ def LEDH_SDE_flow_dynamics(N, n, eta0, eta1, SigmaX, ypred, SigmaY, beta, dL, He
         covPost     = post_cov(SigmaX[i,:,:], SigmaY[i,:,:], U)
         JacobPost   = JacobiLogNormal(eta1[i,:], muPost, covPost, U)
         JLP         = (1.0 - beta) * JacobPrior + beta * JacobPost  
-          
+        
         f           = drift_f(K1, K2, JLP, JacobLike[i,:])
         dw          = norm_rvs(n, w0, dL * wI) 
         
-        deta[i].assign( f * dL + tf.linalg.matvec(q, dw) ) 
+        deta[i,:].assign( f * dL + tf.linalg.matvec(q, dw) ) 
         prod[i].assign( tf.math.abs(dL * tf.math.reduce_prod(1 + f)) ) 
 
     return deta, prod

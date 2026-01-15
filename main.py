@@ -665,14 +665,14 @@ weights_LEDH_SDE_EKF = res_LEDH['weights']
 Jx_LEDH_SDE_EKF      = res_LEDH['Jx']
 Jw_LEDH_SDE_EKF      = res_LEDH['Jw']
 
-with open(pathdat+"res_LEDH_SDE_UKF.pkl", 'rb') as file:
-    res_LEDH = pkl.load(file)
+# with open(pathdat+"res_LEDH_SDE_UKF.pkl", 'rb') as file:
+#     res_LEDH = pkl.load(file)
     
-X_LEDH_SDE          = res_LEDH['res']
-ess_LEDH_SDE        = res_LEDH['ess']
-weights_LEDH_SDE    = res_LEDH['weights']
-Jx_LEDH_SDE         = res_LEDH['Jx']
-Jw_LEDH_SDE         = res_LEDH['Jw']
+# X_LEDH_SDE          = res_LEDH['res']
+# ess_LEDH_SDE        = res_LEDH['ess']
+# weights_LEDH_SDE    = res_LEDH['weights']
+# Jx_LEDH_SDE         = res_LEDH['Jx']
+# Jw_LEDH_SDE         = res_LEDH['Jw']
 
 
 for i in range(nD):
@@ -683,7 +683,7 @@ plt.show()
 
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_LEDH_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue')
+    # plt.plot(X_LEDH_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue')
     plt.plot(X_LEDH_SDE_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='purple')
 plt.show() 
     
@@ -698,7 +698,7 @@ for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
     plt.plot(X_LEDH_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red')
     plt.plot(X_LEDH_SDE_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange')
-    plt.show() 
+plt.show() 
 
 
 fig, ax = plt.subplots(1,2, figsize=(12,4))

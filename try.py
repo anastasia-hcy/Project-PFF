@@ -26,7 +26,7 @@ tf.random.set_seed(123)
 
 import keras
 from keras import layers, Loss, ops
-from scripts import ParticleFilter, normalize_weights, compute_posterior
+from scripts import ParticleFilter, compute_posterior
 
 
 with open(pathdat+"data_sim.pkl", 'rb') as file:
@@ -38,17 +38,16 @@ Np              = 100
 nT, nD          = X1.shape
 
 X_PF_1, ess_PF_1, weights_PF_1, particles_PF_1, particles2_PF_1 = ParticleFilter(Y1, N=Np)
-# X_PF_S_1, ess_PF_S_1, weights_PF_S_1, particles_PF_S_1, particles2_PF_S_1 = ParticleFilter(Y1, N=Np, resample="Soft")
+X_PF_S_1, ess_PF_S_1, weights_PF_S_1, particles_PF_S_1, particles2_PF_S_1 = ParticleFilter(Y1, N=Np, resample="Soft")
 # X_PF_OT_1, ess_PF_OT_1, weights_PF_OT_1, particles_PF_OT_1, particles2_PF_OT_1 = ParticleFilter(Y1, N=Np, resample="OT")
 
 fig, ax = plt.subplots(figsize=(6,4))
 for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    # plt.plot(X_PF_S_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
+    plt.plot(X_PF_S_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
     plt.plot(X_PF_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
     # plt.plot(X_PF_OT_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='yellow') 
 plt.show() 
-
 
 
 class particles_loss(Loss):
@@ -71,8 +70,6 @@ class particles_loss(Loss):
         return loss
 
 
-
-
 class Sampling(layers.Layer):
     def __init__(self):
         super().__init__()
@@ -86,10 +83,10 @@ class Sampling(layers.Layer):
 class EncoderPT(layers.Layer):
     def __init__(self, embedding_dim, num_heads):
         super(EncoderPT, self).__init__()
-        self.ffn1 = layers.Dense(embedding_dim, activation='tanh')
+        self.ffn1 = layers.Dense(embedding_dim)
         self.attention = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
         self.ffn2 = keras.Sequential([
-            layers.Dense(embedding_dim, activation='tanh'),  # Feed Forward layer
+            layers.Dense(embedding_dim),  # Feed Forward layer
             layers.Dense(embedding_dim)  # Output to match embedding dimension
         ])
         self.mean = layers.Dense(embedding_dim)
@@ -115,11 +112,10 @@ class DecoderPT(layers.Layer):
         self.attention1 = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
         self.attention2 = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
         self.ffn = keras.Sequential([
-            layers.Dense(embedding_dim, activation='tanh'),  # Feed Forward layer
+            layers.Dense(embedding_dim),  # Feed Forward layer
             layers.Dense(embedding_dim)  # Output to match embedding dimension
         ])
         self.output_layer = layers.Dense(units=1)
-        self.reshape_layer = layers.Reshape((-1,))
         self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
         self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
         self.layernorm3 = layers.LayerNormalization(epsilon=1e-6)
@@ -136,20 +132,18 @@ class DecoderPT(layers.Layer):
         out3 = self.layernorm3(ffn_output)
         
         output = self.output_layer(out3)
-        return self.reshape_layer(output)
+        return ops.squeeze(output, axis=-1) 
     
 class ParticleTransform(keras.Model):
     
-    def __init__(self, h, k, N, SigmaX):
+    def __init__(self, h, k, SigmaX):
         super().__init__()
-        self.N = N
         self.k = k
         self.SigmaX = SigmaX
-        self.SigmaX_inv = tf.linalg.inv(SigmaX)
-        self.SigmaX_det = tf.math.log( tf.math.sqrt(tf.linalg.det(SigmaX)) )
+        self.SigmaX_inv = ops.linalg.inv(SigmaX)
+        self.SigmaX_det = ops.log( tf.math.sqrt(tf.linalg.det(SigmaX)) )
         self.encoder = EncoderPT(embedding_dim=k, num_heads=h)
         self.decoder = DecoderPT(embedding_dim=k, num_heads=h)
-        self.reshape_layer = layers.Reshape((-1,1))
         
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
         self.reconstruction_loss_tracker = keras.metrics.Mean(name="reconstruction_loss")
@@ -168,7 +162,7 @@ class ParticleTransform(keras.Model):
         )
         
     def call(self, x):   
-        inputs = self.reshape_layer(x)
+        inputs = ops.expand_dims(x, axis=-1)
         z_mu, z_lv, z = self.encoder(inputs)
         reconstruction = self.decoder(z*0.0, z)        
         return reconstruction, z_mu, z_lv
@@ -176,13 +170,14 @@ class ParticleTransform(keras.Model):
     def train_step(self, data):
         x, y = data      
         with tf.GradientTape() as tape:      
-                  
-            reconstruction, z_mu, z_lv = self(x)          
-            diff = reconstruction - x
-            diffSum = - 1/2 * tf.reduce_sum( diff @ self.SigmaX_inv * diff , axis=-1) 
-            reconstruction_loss = - y * ( self.SigmaX_det + self.LogSumExp(diffSum) ) 
             
-            kl_loss = -0.5 * (1 + z_lv - ops.square(z_mu) - ops.exp(z_lv))
+            reconstruction, z_mu, z_lv = self(x)  
+                            
+            diff = reconstruction - x
+            diffSum = ops.log(y) - 1/2 * tf.reduce_sum( diff @ self.SigmaX_inv * diff, axis=-1) 
+            reconstruction_loss =  - ops.mean(- self.SigmaX_det + self.LogSumExp(diffSum))
+            
+            kl_loss = - 0.5 * (1 + z_lv - ops.square(z_mu) - ops.exp(z_lv))
             kl_loss = ops.mean(ops.sum(kl_loss, axis=-1))
             total_loss = reconstruction_loss + kl_loss
             
@@ -196,41 +191,25 @@ class ParticleTransform(keras.Model):
             "reconstruction_loss": self.reconstruction_loss_tracker.result(),
             "kl_loss": self.kl_loss_tracker.result(),
         }
-        
-    # def call(self, inputs):
-    #     inputs = self.reshape_layer(inputs)
-    #     x = self.encoder(inputs)
-    #     x = self.decoder(x*0.0, x)
-    #     return x
     
-    # def train_step(self, data):
-    #     x, y = data
-    #     with tf.GradientTape() as tape:
-    #         y_pred = self(x)
-    #         loss = self.compute_loss(y=y, y_pred=y_pred) 
-    #     gradients = tape.gradient(loss, self.trainable_variables)
-    #     self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
-    #     return {"loss": loss}
-    
-    
-i = 25
 Sigma0 = tf.eye(nD)
-w0 = tf.cast(normalize_weights(weights_PF_1[i,:]), tf.float32)
-
+w0 = tf.cast(weights_PF_1, tf.float32)
 optimizer = keras.optimizers.SGD(1e-3)
-model = ParticleTransform(h=8, k=32, N=tf.cast(Np,tf.float32), SigmaX=Sigma0)
-
+model = ParticleTransform(h=8, k=32, SigmaX=Sigma0)
 model.compile(optimizer=optimizer)
-model.fit(x=particles_PF_1[i,:,:], y=w0, verbose=1, epochs=10)
+model.fit(x=particles2_PF_1, y=weights_PF_1, verbose=1, epochs=10)
 
-new_parts, latent_mu, laten_lv = model.predict(particles_PF_1[i,:,:])
+i = 20
+new_parts, latent_mu, latent_lv = model.predict(tf.reshape(particles_PF_S_1[i,:,:],(1,100,4)))
 
 plt.hist(particles2_PF_1[i,:,:].numpy().flatten(), bins=30, alpha=0.5, label='Particles')
 plt.hist(new_parts.flatten(), bins=30, alpha=0.5, label='Transformed Particles', color="red")
 plt.show() 
 
-compute_posterior(tf.ones(Np)/Np, new_parts)
-compute_posterior( tf.cast(w0, tf.float64), particles_PF_1[i,:,:])
+compute_posterior(tf.ones(Np)/Np, tf.reshape(new_parts, (100,4)))
+compute_posterior(tf.ones(Np, dtype=tf.float64)/Np, particles2_PF_1[i,:,:])
+
+
 
 
 
@@ -241,8 +220,12 @@ num_heads = 8
 encoder = EncoderPT(embedding_dim, num_heads)
 decoder = DecoderPT(embedding_dim, num_heads)
 
-x = tf.random.uniform((10,100,4)) 
-x = layers.Reshape((1,-1))(x)
+x = tf.random.uniform((5,100,4)) 
+x = ops.expand_dims(x, axis=-1)
+layers.Reshape((1,-1))(x)
+
+conv_layer = layers.Conv2DTranspose(num_heads, embedding_dim)
+conv_layer(x)
 
 ffn = layers.Dense(embedding_dim, activation='tanh')
 ffn_output = ffn(x) # OUtput from first ff layer : (Batch size, Input sequence length, embedding_dim)
@@ -250,15 +233,12 @@ ffn_output.shape
 
 # Input for encoder : (Batch Size, Input Sequence Length, 1)
 enc_output = encoder(x)  # Output from encoder : (Batch size, Input sequence length, embedding_dim)
+enc_output[-1].shape
 
 # Input for decoder (Batch Size, Sequence Length, Embedding Size)
-dec_input = tf.zeros((100, 4, embedding_dim))
+dec_input = tf.zeros((5, 100, 4, embedding_dim))
 dec_output = decoder(dec_input, enc_output[-1])  # Output from decoder : (Batch size, Input sequence length, embedding_dim)
-
-
-
-
-
+dec_output.shape
 
 attention = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
 attn_output, attn_weights = attention(ffn_output, ffn_output, return_attention_scores=True)
@@ -269,8 +249,12 @@ query, _, key, _, val, _, out, _ = attention.get_weights()
 # queury (32, 8, 32) , key (32, 8, 32) , value (32,8,32) , output (8,32,32)
 
     
-latent_dim = 2
-encoder_inputs = keras.Input(shape=(28, 28, 1))
+    
+    
+    
+    
+latent_dim = 4
+encoder_inputs = keras.Input(shape=(100, 4, 1))
 x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
 x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
 x = layers.Flatten()(x)
@@ -282,24 +266,33 @@ encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
 encoder.summary()   
     
 latent_inputs = keras.Input(shape=(latent_dim,))
-x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
-x = layers.Reshape((7, 7, 64))(x)
-x = layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
+x = layers.Dense(100 * 64, activation="relu")(latent_inputs)
+x = layers.Reshape((50, 2, 64))(x)
 x = layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
-decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
+x = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
+decoder_outputs = ops.squeeze(x, axis=-1) 
 decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 decoder.summary()
 
     
 class VAE(keras.Model):
-    def __init__(self, encoder, decoder, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, encoder, decoder, SigmaX):
+        super().__init__()
+        self.SigmaX = SigmaX
+        self.SigmaX_inv = tf.linalg.inv(SigmaX)
+        self.SigmaX_det = tf.math.log( tf.math.sqrt(tf.linalg.det(SigmaX)) )
+        super().__init__()
         self.encoder = encoder
         self.decoder = decoder
+        
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
         self.reconstruction_loss_tracker = keras.metrics.Mean(name="reconstruction_loss")
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
 
+    def LogSumExp(self, x):
+        c               = tf.reduce_max(x) 
+        return c + tf.math.log(tf.reduce_sum(tf.math.exp(x - c), axis=0))
+    
     @property
     def metrics(self):
         return [
@@ -308,19 +301,29 @@ class VAE(keras.Model):
             self.kl_loss_tracker,
         ]
 
+    def call(self, x):   
+        inputs = ops.expand_dims(x, axis=-1)
+        z_mu, z_lv, z = self.encoder(inputs)
+        reconstruction = self.decoder(z)        
+        return reconstruction, z_mu, z_lv
+    
     def train_step(self, data):
+        x, y = data
         with tf.GradientTape() as tape:
-            z_mean, z_log_var, z = self.encoder(data)
-            reconstruction = self.decoder(z)
-            reconstruction_loss = ops.mean(
-                ops.sum(
-                    keras.losses.binary_crossentropy(data, reconstruction),
-                    axis=(1, 2),
-                )
-            )
+            reconstruction, z_mean, z_log_var = self(x)
+            
+            diff = x - reconstruction
+            diffSum = - 1/2 * tf.reduce_sum( diff @ self.SigmaX_inv * diff, axis=-1) 
+            reconstruction_loss =  - ops.mean(y - self.SigmaX_det + self.LogSumExp(diffSum))
+            
+            kl_loss = - 0.5 * (1 + z_log_var - ops.square(z_mean) - ops.exp(z_log_var))
+            kl_loss = ops.mean(ops.sum(kl_loss, axis=-1))
+            total_loss = reconstruction_loss + kl_loss
+            
             kl_loss = -0.5 * (1 + z_log_var - ops.square(z_mean) - ops.exp(z_log_var))
             kl_loss = ops.mean(ops.sum(kl_loss, axis=1))
             total_loss = reconstruction_loss + kl_loss
+            
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         self.total_loss_tracker.update_state(total_loss)
@@ -332,14 +335,22 @@ class VAE(keras.Model):
             "kl_loss": self.kl_loss_tracker.result(),
         }
 
-(x_train, _), (x_test, _) = keras.datasets.mnist.load_data()
-mnist_digits = np.concatenate([x_train, x_test], axis=0)
-mnist_digits = np.expand_dims(mnist_digits, -1).astype("float32") / 255
-
-vae = VAE(encoder, decoder)
-vae.compile(optimizer=keras.optimizers.Adam())
-vae.fit(mnist_digits, epochs=30, batch_size=128)
+vae = VAE(encoder, decoder, Sigma0)
+vae.compile(optimizer=keras.optimizers.Adam(1e-3))
+vae.fit(x=particles_PF_1, y=w0, verbose=1, epochs=10)
     
+
+i = 20
+new_parts, latent_mu, latent_lv = vae.predict(tf.reshape(particles_PF_S_1[i,:,:],(1,100,4)))
+
+plt.hist(particles2_PF_1[i,:,:].numpy().flatten(), bins=30, alpha=0.5, label='Particles')
+plt.hist(new_parts.flatten(), bins=30, alpha=0.5, label='Transformed Particles', color="red")
+plt.show() 
+
+compute_posterior(tf.ones(Np)/Np, tf.reshape(new_parts, (100,4)))
+compute_posterior(tf.ones(Np, dtype=tf.float64)/Np, particles2_PF_1[i,:,:])
+
+
 
 
 class DotProductAttention(layers.Layer):

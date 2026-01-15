@@ -23,6 +23,8 @@ from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
 from .functions2 import soft_resample, LogSumExp
 from .functions2 import ot_resample, cost_matrix, OT_matrix
 
+from .transformer import MultiHeadPT
+
 # Define package-level variables
 # __version__ = "1.0.0"
 
@@ -50,7 +52,8 @@ __all__ = ["SE_kernel", "SE_kernel_divC", "SE_Cov_div",
            "LEDH_SDE_Hessians", "LEDH_SDE_flow_dynamics", 
            
            "LogSumExp", 
-           "soft_resample", "ot_resample", "cost_matrix", "OT_matrix"]
+           "soft_resample", "ot_resample", "cost_matrix", "OT_matrix", 
+           "MultiHeadPT"]
 
 
 
