@@ -10,6 +10,133 @@ from .functions2 import soft_resample, ot_resample, cost_matrix
 import keras
 from keras import layers, ops
 
+##############################################
+# Sampling layer for variational autoencoder # 
+##############################################
+
+class Sampling(layers.Layer):
+    def __init__(self):
+        super().__init__()
+        self.seed_generator = keras.random.SeedGenerator(123)
+
+    def call(self, inputs):
+        z_mean, z_log_var = inputs
+        epsilon = keras.random.normal(shape=ops.shape(z_mean), seed=self.seed_generator)
+        return z_mean + ops.exp(0.5 * z_log_var) * epsilon
+
+
+#########################################################
+# Transformer with multi-head, self-attention mechanism #
+######################################################### 
+
+class EncoderMHPT(layers.Layer):
+    def __init__(self, embedding_dim, num_heads):
+        super(EncoderMHPT, self).__init__()
+        self.ffn1 = layers.Dense(embedding_dim)
+        self.attention = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
+        self.ffn2 = keras.Sequential([
+            layers.Dense(embedding_dim), 
+            layers.Dense(embedding_dim) 
+        ])
+        self.mean = layers.Dense(embedding_dim)
+        self.log_var = layers.Dense(embedding_dim)
+        self.sample = Sampling()
+        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
+
+    def call(self, x):
+        out = self.ffn1(x)
+        attn_output = self.attention(out, out)
+        out1 = self.layernorm1(attn_output)  
+        ffn_output = self.ffn2(out1)
+        output = self.layernorm2(ffn_output)
+        z_mu = self.mean(output) 
+        z_logvar = self.log_var(output)
+        z = self.sample((z_mu, z_logvar))
+        return (z_mu, z_logvar, z)
+    
+class DecoderMHPT(layers.Layer):
+    def __init__(self, embedding_dim, num_heads, ndim):
+        super(DecoderMHPT, self).__init__()
+        self.attention1 = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
+        self.attention2 = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
+        self.ffn = keras.Sequential([
+            layers.Dense(embedding_dim), 
+            layers.Dense(embedding_dim)  
+        ])
+        self.output_layer = layers.Dense(units=ndim)
+        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm3 = layers.LayerNormalization(epsilon=1e-6)
+
+    def call(self, x, enc_output):
+        attn1 = self.attention1(x, x)
+        out1 = self.layernorm1(x + attn1)
+        attn2 = self.attention2(out1, enc_output)
+        out2 = self.layernorm2(enc_output + attn2) 
+        ffn_output = self.ffn(out2)
+        out3 = self.layernorm3(ffn_output)
+        output = self.output_layer(out3)
+        return output 
+    
+class MultiHeadPT(keras.Model):
+    
+    def __init__(self, h, k, SigmaX, ndims):
+        super().__init__()
+        self.SigmaX = SigmaX
+        self.SigmaX_inv = ops.linalg.inv(SigmaX)
+        self.SigmaX_det = ops.log( tf.math.sqrt(tf.linalg.det(SigmaX)) )
+        self.encoder = EncoderMHPT(embedding_dim=k, num_heads=h)
+        self.decoder = DecoderMHPT(embedding_dim=k, num_heads=h, ndim=ndims)
+        self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
+        self.reconstruction_loss_tracker = keras.metrics.Mean(name="reconstruction_loss")
+        self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
+
+    def LogSumExp(self, x):
+        c               = ops.max(x) 
+        return c + ops.log(ops.sum(tf.math.exp(x - c), axis=0))
+    
+    @property
+    def metrics(self):
+        return (
+            self.total_loss_tracker,
+            self.reconstruction_loss_tracker,
+            self.kl_loss_tracker,
+        )
+        
+    def call(self, x):   
+        inputs = x[0] 
+        z_mu, z_lv, z = self.encoder(inputs)
+        reconstruction = self.decoder(z*0.0, z)        
+        return reconstruction, z_mu, z_lv
+
+    def train_step(self, data):
+        x, y = data
+        with tf.GradientTape() as tape:      
+            
+            reconstruction, z_mu, z_lv = self(x)  
+            diff = reconstruction - y
+            diffSum =  - 1/2 * ops.sum( diff @ self.SigmaX_inv * diff, axis=-1) 
+            reconstruction_loss =  - ops.sum(x[1] * ( - self.SigmaX_det + self.LogSumExp(diffSum)))
+            
+            kl_loss = - 0.5 * (1 + z_lv - ops.square(z_mu) - ops.exp(z_lv))
+            kl_loss = ops.mean(ops.sum(kl_loss, axis=-1))
+            total_loss = reconstruction_loss + kl_loss
+            
+        grads = tape.gradient(total_loss, self.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        self.total_loss_tracker.update_state(total_loss)
+        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+        self.kl_loss_tracker.update_state(kl_loss)
+        return {
+            "loss": self.total_loss_tracker.result(),
+            "reconstruction_loss": self.reconstruction_loss_tracker.result(),
+            "kl_loss": self.kl_loss_tracker.result(),
+        }
+        
+        
+        
+
 
 
 def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resample=None,  backpropagation=False, mu0=None, Sigma0=None, muy=None):
@@ -77,11 +204,7 @@ def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=
         inds        = tf.reshape(tf.range(N, dtype=tf.float32), (-1,1))
         C           = cost_matrix(inds,inds)
         
-    if backpropagation == "Multi-Head": 
-        _, _, train_weights, _, train_particles2 = ParticleFilter(y, N=N)
-        DPT = MultiHeadPT(h=8, k=32, SigmaX=tf.cast(V, dtype=tf.float32))
-        DPT.compile(optimizer=keras.optimizers.SGD(1e-3))
-        DPT.fit(x=train_particles2, y=train_weights, epochs=10)
+    # if backpropagation == "Multi-Head": 
         
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
@@ -113,14 +236,14 @@ def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=
             wbar        = normalize_weights(what)
             
         elif ness >= NT:
-            xbar        = x_pred
+            xbar        = x_pred 
             wbar        = w_norm
         
-        if backpropagation == "Multi-Head": 
-            xhat        = tf.cast(xbar, dtype=tf.float32)
-            xbar, _, _  = DPT.predict(xhat)
-            xbar        = tf.cast(xbar, tf.float64)
-            wbar        = tf.ones((N,), dtype=tf.float64) / N 
+        # if backpropagation == "Multi-Head": 
+        #     xhat        = tf.cast(xbar, dtype=tf.float32)
+        #     xbar, _, _  = DPT.predict(xhat)
+        #     xbar        = tf.cast(xbar, tf.float64)
+        #     wbar        = tf.ones((N,), dtype=tf.float64) / N 
             
         x_filt      = compute_posterior(wbar, xbar)
         x_prev      = xbar        
@@ -131,129 +254,3 @@ def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=
     return X_filtered, ESS, Weights, X_part, X_part2 
 
 
-
-
-class Sampling(layers.Layer):
-    def __init__(self):
-        super().__init__()
-        self.seed_generator = keras.random.SeedGenerator(123)
-
-    def call(self, inputs):
-        z_mean, z_log_var = inputs
-        epsilon = keras.random.normal(shape=ops.shape(z_mean), seed=self.seed_generator)
-        return z_mean + ops.exp(0.5 * z_log_var) * epsilon
-
-class EncoderMHPT(layers.Layer):
-    def __init__(self, embedding_dim, num_heads):
-        super(EncoderMHPT, self).__init__()
-        self.ffn1 = layers.Dense(embedding_dim)
-        self.attention = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
-        self.ffn2 = keras.Sequential([
-            layers.Dense(embedding_dim),  # Feed Forward layer
-            layers.Dense(embedding_dim)  # Output to match embedding dimension
-        ])
-        self.mean = layers.Dense(embedding_dim)
-        self.log_var = layers.Dense(embedding_dim)
-        self.sample = Sampling()
-        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
-        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
-
-    def call(self, x):
-        out = self.ffn1(x)
-        attn_output = self.attention(out, out)
-        out1 = self.layernorm1(x + attn_output)  
-        ffn_output = self.ffn2(out1)
-        output = self.layernorm2(ffn_output)
-        z_mu = self.mean(output) 
-        z_logvar = self.log_var(output)
-        z = self.sample((z_mu, z_logvar))
-        return (z_mu, z_logvar, z)
-    
-class DecoderMHPT(layers.Layer):
-    def __init__(self, embedding_dim, num_heads):
-        super(DecoderMHPT, self).__init__()
-        self.attention1 = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
-        self.attention2 = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
-        self.ffn = keras.Sequential([
-            layers.Dense(embedding_dim),  # Feed Forward layer
-            layers.Dense(embedding_dim)  # Output to match embedding dimension
-        ])
-        self.output_layer = layers.Dense(units=1)
-        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
-        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
-        self.layernorm3 = layers.LayerNormalization(epsilon=1e-6)
-
-    def call(self, x, enc_output):
-    
-        attn1 = self.attention1(x, x)
-        out1 = self.layernorm1(x + attn1)
-        
-        attn2 = self.attention2(out1, enc_output)
-        out2 = self.layernorm2(enc_output + attn2) 
-        
-        ffn_output = self.ffn(out2)
-        out3 = self.layernorm3(ffn_output)
-        
-        output = self.output_layer(out3)
-        return ops.squeeze(output, axis=-1) 
-    
-class MultiHeadPT(keras.Model):
-    
-    def __init__(self, h, k, SigmaX):
-        super().__init__()
-        self.k = k
-        self.SigmaX = SigmaX
-        self.SigmaX_inv = ops.linalg.inv(SigmaX)
-        self.SigmaX_det = ops.log( tf.math.sqrt(tf.linalg.det(SigmaX)) )
-        self.encoder = EncoderMHPT(embedding_dim=k, num_heads=h)
-        self.decoder = DecoderMHPT(embedding_dim=k, num_heads=h)
-        
-        self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
-        self.reconstruction_loss_tracker = keras.metrics.Mean(name="reconstruction_loss")
-        self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
-
-    def LogSumExp(self, x):
-        c               = tf.reduce_max(x) 
-        return c + tf.math.log(tf.reduce_sum(tf.math.exp(x - c), axis=0))
-    
-    @property
-    def metrics(self):
-        return (
-            self.total_loss_tracker,
-            self.reconstruction_loss_tracker,
-            self.kl_loss_tracker,
-        )
-        
-    def call(self, x):   
-        inputs = ops.expand_dims(x, axis=-1)
-        z_mu, z_lv, z = self.encoder(inputs)
-        reconstruction = self.decoder(z, z)        
-        return reconstruction, z_mu, z_lv
-
-    def train_step(self, data):
-        x, y = data      
-        with tf.GradientTape() as tape:      
-                  
-            reconstruction, z_mu, z_lv = self(x)         
-             
-            diff = reconstruction - x
-            diffSum = ops.log(y) - 1/2 * tf.reduce_sum( diff @ self.SigmaX_inv * diff, axis=-1) 
-            reconstruction_loss =  - ops.mean(- self.SigmaX_det + self.LogSumExp(diffSum))
-            
-            kl_loss = - 0.5 * (1 + z_lv - ops.square(z_mu) - ops.exp(z_lv))
-            kl_loss = ops.mean(ops.sum(kl_loss, axis=-1))
-            total_loss = reconstruction_loss + kl_loss
-            
-        grads = tape.gradient(total_loss, self.trainable_weights)
-        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
-        self.total_loss_tracker.update_state(total_loss)
-        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
-        self.kl_loss_tracker.update_state(kl_loss)
-        return {
-            "loss": self.total_loss_tracker.result(),
-            "reconstruction_loss": self.reconstruction_loss_tracker.result(),
-            "kl_loss": self.kl_loss_tracker.result(),
-        }
-        
-        
-        

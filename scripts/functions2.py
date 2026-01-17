@@ -183,7 +183,7 @@ def SDE(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
     
     for i in range(nTimes):
         
-        x_prev      = initiate_particles(Np, ndims, mu0, Sigma0)
+        x_prev      = initiate_particles(Np, ndims, x_filt, Sigma0)
         
         gx          = measurements_pred(model, ndims, muy, B, x_filt, W, u)
         mu_p        = post_mean(mu0, gx, Sigma0, W, u)
@@ -208,6 +208,7 @@ def SDE(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=N
 ####################################
 
 def LEDH_SDE_Hessians(N, SigmaX, y, ypred, SigmaY, U):
+    """Compute and return the Hessians and Jacobian matricies of the log of the Normal distributions for the psuedo particles in LEDH."""
     Jacob_LLike     = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
     Hess_LLike      = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
     Hess_Lprior     = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
@@ -218,7 +219,7 @@ def LEDH_SDE_Hessians(N, SigmaX, y, ypred, SigmaY, U):
     return Hess_Lprior.stack(), Hess_LLike.stack(), Jacob_LLike.stack()
 
 def LEDH_SDE_flow_dynamics(N, n, eta0, eta1, SigmaX, ypred, SigmaY, beta, dL, HessPrior, HessLike, JacobLike, mc, w0, wI, Q, q, U):
-    """Compute and return the flow dynamics of the pseudo particles for migration in LEDH using the SDE."""
+    """Compute and return the flow dynamics of the pseudo particles for migration in LEDH using the stochastic differential equations."""
     deta            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))     
     prod            = tf.Variable(tf.zeros((N,), dtype=tf.float64))    
     for i in range(N):        
@@ -264,26 +265,27 @@ def soft_resample(N, x, w):
 ########################
 
 def cost_matrix(vectors1, vectors2):
+    """Compute and return the cost matrix base on euclidean distances for optimal transport."""
     v1              = tf.expand_dims(vectors1, 1)
     v2              = tf.expand_dims(vectors2, 0)
     differences     = v1 - v2
     M               = tf.norm(differences, ord='euclidean', axis=-1)
     return M / tf.reduce_max(M)
 
-def OT_matrix(a, b, C, reg):
-    """Compute and return the optimal transport matrix using the Sinkhorn algorithm"""
-    POT             = sinkhorn(a.numpy(), b.numpy(), C.numpy(), reg=reg)
-    return tf.constant(POT, dtype=tf.float64)
-
-
 def ot_resample(N, x, w, C, reg=0.1):
     """Resample from the set of particles, x, using the weights, w, as multinomial probabilities and return the new set of particles, xbar, and the new weights, wbar."""
     Lamb            = tf.cast(tfd.Uniform().sample(), tf.float64)
     what            = Lamb * w + (1-Lamb) / N
-    POT             = OT_matrix(w, what, C, reg)
+    POT             = tf.constant(sinkhorn(w.numpy(), what.numpy(), C.numpy(), reg=reg), dtype=tf.float64)
     xbar            = POT @ x
     wbar            = w / what
     return xbar, wbar, POT
+
+
+
+
+
+
 
 
 
@@ -298,14 +300,6 @@ def ot_cv_score(w, x, xpred, SigmaX_inv, SigmaX_det):
 def ot_grid(num_reg=100):
     x               = tf.cast(tf.linspace(1e-3, 1, num_reg), tf.float64)
     return x
-
-def ot_cv(a, b, u, Sigma_inv, Sigma_det, grid, k=5):
-    reg             = grid[0]
-    niter           = grid[1]
-    POT             = OT_matrix(a, b, u, reg, niter)
-    v               = POT @ u
-    score_k         = ot_cv_score(b, u, v, Sigma_inv, Sigma_det)
-    return 
 
 
 

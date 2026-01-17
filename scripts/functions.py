@@ -7,7 +7,6 @@ tf.random.set_seed(123)
 
 from .model import initiate_particles, norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
 from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
-from .functions2 import soft_resample, ot_resample, cost_matrix
 
 ##########################
 # Standard Kalman Filter # 
@@ -401,7 +400,7 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
     N : int32, optional. Defaults to 1000 if not provided.
-    resample : string, optional. The resampling scheme. Defaults to Multinomial. 
+    resample : Bool, optional. The multinomial resampling scheme. Defaults to true.  
     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
     muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
@@ -440,16 +439,12 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         Sigma0      = V
         
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
-    resample        = "Multinomial" if resample is None else resample
+    resample        = True if resample is None else resample
     N               = 1000 if N is None else N
     NT              = N/2
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
     I               = tf.ones((ndims,), dtype=tf.float64)
     
-    if resample == "OT":
-        inds        = tf.reshape(tf.range(N, dtype=tf.float32), (-1,1))
-        C           = cost_matrix(inds,inds)
-        
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
     Weights         = tf.Variable(tf.zeros((nTimes,N), dtype=tf.float64))
@@ -473,15 +468,6 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         
         if resample == "Multinomial" and ness < NT: 
             xbar, wbar  = multinomial_resample(N, x_pred, w_norm)
-            
-        elif resample == "Soft" and ness < NT:
-            xbar, what  = soft_resample(N, x_pred, w_norm) 
-            wbar        = normalize_weights(what)
-        
-        elif resample == "OT" and ness < NT:
-            xbar, what, pot = ot_resample(N, x_pred, w_norm, C)
-            wbar        = normalize_weights(what)
-            
         elif ness >= NT:
             xbar        = x_pred
             wbar        = w_norm

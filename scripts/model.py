@@ -4,9 +4,9 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 
-#############################################
-#  Squared Exponential Kernels & Divergence # 
-#############################################
+#########################################################
+#  Squared Exponential Kernels, Covariance & Divergence # 
+#########################################################
 
 def SE_kernel(x1, x2, scale, length):
     """The Squared Exponential (SE) kernel given two points, x1 and x2, and the two parameters, scale and length."""
@@ -19,38 +19,19 @@ def SE_kernel_divC(x1, x2, length):
 
 
 def SE_Cov_div(ndims, x, scale=None, length=None):
-    """
-    Compute the covariance matrix and the constant part of its derivatives using the Squared Exponential (SE) kernel given a vector, x
-
-    Keyword args:
-    -------------
-    ndims : int32. Dimension of input vector, x. 
-    x : tf.Tensor/array/list of float64. Input vector x to be evaluated. 
-    scale : float64, optional. The scale parameter for the SE kernel. Defaults to 1.0 if not provided.
-    length : float64, optional. The length parameter for the SE kernel. Defaults to 1.0 if not provided.
-
-    Returns:
-    --------
-    M : tf.Variable of float64 with shape (ndims,ndims). The covariance matrix. 
-    Md : tf.Variable of float64 with shape (ndims,ndims). The constant part of the derivatives of the covariance matrix.
-    """
+    """Compute the covariance matrix and the constant part of its derivatives, M and Md, using the Squared Exponential (SE) kernel given a vector, x"""
     scale           = 1.0 if scale is None else scale 
     length          = 1.0 if length is None else length 
-
     M               = tf.Variable( tf.zeros((ndims,ndims), dtype=tf.float64) )
     Md              = tf.Variable( tf.zeros((ndims,ndims), dtype=tf.float64) )
-
     for i in range(ndims): 
         for j in range(i,ndims): 
-
             v       = SE_kernel(x[i], x[j], scale=scale, length=length)
             M[i,j].assign(v)                     
             M[j,i].assign(v)                     
-
             vd      = SE_kernel_divC(x[i], x[j], length=length)
             Md[i,j].assign(vd)
             Md[j,i].assign(-vd)
-
     return M, Md
 
 ##############################
@@ -58,26 +39,14 @@ def SE_Cov_div(ndims, x, scale=None, length=None):
 ############################## 
 
 def norm_rvs(n, mean, Sigma):
-    """
-    Generate and return Gaussian random variables using Cholesky decomposition and standard Normal given the expectation and covariance matrix, mean and Sigma.
-
-    Keyword args:
-    -------------
-    n : int32. Dimension of input expectation vector, mean. 
-    mean : tf.Tensor/array/list of float64 with shape (n,). Expectation of the Gaussian random variables to be generated. 
-    Sigma : tf.Tensor/array of float64 with shape (n,n). Covariance of the Gaussian random variables to be generated. 
-
-    Returns:
-    --------
-    x : tf.Tensor of float64 with shape (n,). A Gaussian random vector. 
-    """
+    """Generate and return Gaussian random variables, x, using Cholesky decomposition and standard Normal given the expectation and covariance matrix, mean and Sigma."""
     chol            = tf.linalg.cholesky(Sigma)
     x_par           = tf.random.normal((n,), dtype=tf.float64)
     x               = tf.linalg.matvec(chol, x_par) + mean
     return x
 
 def initiate_particles(N, n, mu0, Sigma0):
-    """Draw and return a set of initial particles from the importance distribution."""
+    """Draw and return a set of initial particles, x0, from the importance distribution, Gaussian with mean and covariance, m0 and Sigma0."""
     x0              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
     for i in range(N):  
         x0[i,:].assign( norm_rvs(n, mu0, Sigma0) )
