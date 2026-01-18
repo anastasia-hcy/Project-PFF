@@ -6,7 +6,7 @@ tfd = tfp.distributions
 tf.random.set_seed(123)
 
 from .model import initiate_particles, norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
-from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
+from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics, soft_resample
 
 ##########################
 # Standard Kalman Filter # 
@@ -439,7 +439,7 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         Sigma0      = V
         
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
-    resample        = True if resample is None else resample
+    resample        = "Multinomial" if resample is None else resample
         
     N               = 1000 if N is None else N
     NT              = N/2
@@ -467,8 +467,13 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         ness        = compute_ESS(w_norm)
         ESS[i].assign(ness)
         
-        if resample and ness < NT: 
+        if resample == "Multinomial" and ness < NT: 
             xbar, wbar  = multinomial_resample(N, x_pred, w_norm)
+            
+        elif resample == "Soft" and ness < NT:
+            xbar, what  = soft_resample(N, x_pred, w_norm)
+            wbar        = normalize_weights(w_norm / what)
+            
         elif ness >= NT:
             xbar        = x_pred
             wbar        = w_norm

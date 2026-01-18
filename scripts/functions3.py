@@ -29,11 +29,6 @@ class SimpleFNN(keras.Model):
             layers.Dense(32), 
             layers.Dense(ndim)
         ])
-        self.rnn = keras.Sequential([
-            layers.Dense(32), 
-            layers.LSTM(ndim), 
-            layers.Dense(1) 
-        ])
         
     def LogSumExp(self, x):
         c               = ops.max(x) 
@@ -181,7 +176,7 @@ class MultiHeadPT(keras.Model):
 ################################
 
 
-def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resample=None, backpropagation=None, mu0=None, Sigma0=None, muy=None):
+def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, backpropagation=None, mu0=None, Sigma0=None, muy=None):
     """
     Compute the estimated states using the standard Particle Filter given the measurements. 
 
@@ -194,7 +189,7 @@ def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=
     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
     N : int32, optional. Defaults to 1000 if not provided.
-    resample : string, optional. The resampling scheme. Defaults to Multinomial. 
+    backpropagation : string, optional. Defaults to simple feed-forward neural network. 
     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
     muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
@@ -236,20 +231,21 @@ def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=
         Sigma0      = V
         
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
-    resample        = True if resample is None else resample
     backpropagation = "Simple" if backpropagation is None else backpropagation
     N               = 1000 if N is None else N
     NT              = N/2
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
     I               = tf.ones((ndims,), dtype=tf.float64)
-            
-    _, _, weights_train, parts_train, parts2_train = ParticleFilter(y, N=N)
+    
+    w_multi         = tf.ones((N,), dtype=tf.float64) / N 
+    _, _, _, _, parts2_train = ParticleFilter(y, N=N, model=model)
+    _, _, weights_train, parts_train, _ = ParticleFilter(y, N=N, model=model, resample="Soft")
     if backpropagation == "Simple": 
         Transform = SimpleFNN(SigmaX=tf.cast(Sigma0, dtype=tf.float32), ndim=ndims)
     elif backpropagation == "Multi-Head": 
         Transform = MultiHeadPT(h=8, k=32, SigmaX=tf.cast(Sigma0, dtype=tf.float32), ndims=ndims)   
     Transform.compile(optimizer=keras.optimizers.SGD(1e-3))
-    Transform.fit(x=(parts_train, weights_train), y=parts2_train, epochs=50)
+    Transform.fit(x=(parts_train, weights_train), y=parts2_train)
         
     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
@@ -259,7 +255,6 @@ def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=
     
     x_prev          = initiate_particles(N, ndims, mu0, Sigma0)
     w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
-
     for i in range(nTimes):
         
         x_pred, lp  = draw_particles(N, ndims, model, I, y[i,:], x_prev, V, muy, W, Sigma0, B, u)
@@ -272,27 +267,36 @@ def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=
         ness        = compute_ESS(w_norm)
         ESS[i].assign(ness)
         
-        if resample and ness < NT:            
-            inputs      = ( tf.reshape(x_pred,(1,N,ndims)) , tf.reshape(w_norm,(1,N)) )
-            if backpropagation == "Simple": 
-                xhat    = Transform.predict(x=inputs)
-            elif backpropagation == "Multi-Head":
-                xhat, _, _  = Transform.predict(x=inputs)
-            xbar        = tf.cast(tf.reshape(xhat, (N,ndims)), dtype=tf.float64)
-            what        = soft_resample(N, w_norm) 
+        if ness < NT:       
+            _, what     = soft_resample(N, x_pred, w_norm)
             wbar        = normalize_weights(what)
-            
-        elif ness >= NT:
-            xbar        = x_pred 
+        elif ness >= NT: 
             wbar        = w_norm
-        
-        x_filt      = compute_posterior(wbar, xbar)
+                    
+        inputs      = (tf.reshape(x_pred,(1,N,ndims)), tf.reshape(w_norm,(1,N)))
+        if backpropagation == "Simple": 
+            xhat    = Transform.predict(x=inputs)            
+        elif backpropagation == "Multi-Head":
+            xhat, _, _  = Transform.predict(x=inputs)                
+        xbar        = tf.cast(tf.reshape(xhat, (N,ndims)), dtype=tf.float64)
+            
         x_prev      = xbar        
-        w_prev      = wbar
+        w_prev      = wbar        
+        x_filt      = compute_posterior(w_multi, xbar)
         X_part2[i,:,:].assign(x_prev)
         X_filtered[i,:].assign(x_filt)
 
     return X_filtered, ESS, Weights, X_part, X_part2 
+
+
+
+
+
+
+
+
+
+
 
 
 

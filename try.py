@@ -37,11 +37,13 @@ Y1              = data['LG_Obs']
 Np              = 100
 nT, nD          = X1.shape
 
-X_PF_1, ess_PF_1, weights_PF_1, particles_PF_1, particles2_PF_1 = ParticleFilter(Y1, N=Np)
+X_PF_1, _, weights_PF_1, particles_PF_1, particles2_PF_1 = ParticleFilter(Y1, N=Np)
+X_PF_S_1, _, weights_PF_S_1, particles_PF_S_1, particles2_PF_S_1 = ParticleFilter(Y1, N=Np, resample="Soft")
 fig, ax = plt.subplots(figsize=(6,4))
 for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
     plt.plot(X_PF_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
+    plt.plot(X_PF_S_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
 plt.show() 
 
 
@@ -64,15 +66,17 @@ class SimpleFNN(keras.Model):
         return c + ops.log(ops.sum(ops.exp(x - c), axis=0))
         
     def call(self, x):   
-        return self.fnn(x[0])
+        inputs = x[0] 
+        outputs = self.fnn(inputs) 
+        return outputs 
 
     def train_step(self, data):
         x, y = data
         with tf.GradientTape() as tape:      
             y_pred = self(x)  
-            diff = y_pred - y
+            diff = y_pred - y 
             diffSum =  - 1/2 * ops.sum( diff @ self.SigmaX_inv * diff, axis=-1) 
-            loss =  - ops.sum(x[1] * ( - self.SigmaX_det + self.LogSumExp(diffSum)))
+            loss =  - ops.sum( x[1] * ( - self.SigmaX_det + self.LogSumExp(diffSum)))
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
         return {"loss": loss}
@@ -81,11 +85,9 @@ Sigma0 = tf.eye(nD)
 optimizer = keras.optimizers.SGD(1e-3)
 model = SimpleFNN(Sigma0, nD)
 model.compile(optimizer=optimizer)
-model.fit(x=(particles_PF_1, weights_PF_1), y=particles2_PF_1, verbose=1, epochs=10)
+model.fit(x=(particles_PF_S_1, weights_PF_S_1), y=particles2_PF_1, verbose=1, epochs=10)
 
-
-
-i = 30
+i = 90
 inputs = ( tf.reshape(particles_PF_S_1[i,:,:],(1,100,4)) , tf.reshape(weights_PF_S_1[i,:],(1,100)) )
 new_parts = model.predict(x=inputs)
 
@@ -95,11 +97,7 @@ plt.show()
 
 compute_posterior(tf.ones(Np)/Np, tf.reshape(new_parts, (100,4)))
 compute_posterior(tf.ones(Np, dtype=tf.float64)/Np, particles2_PF_1[i,:,:])
-
-
-
-
-
+X1[i,:]
 
 class SimpleFNN_OT(keras_tuner.HyperModel):
     
@@ -378,11 +376,11 @@ Sigma0 = tf.eye(nD)
 optimizer = keras.optimizers.SGD(1e-3)
 model = ParticleTransform(h=8, k=32, SigmaX=Sigma0, ndims=nD)
 model.compile(optimizer=optimizer)
-model.fit(x=(particles_PF_1, weights_PF_1), y=particles2_PF_1, verbose=1, epochs=50)
+model.fit(x=(particles_PF_S_1, weights_PF_S_1), y=particles2_PF_1, verbose=1, epochs=10)
 
 i = 30
 inputs = ( tf.reshape(particles_PF_S_1[i,:,:],(1,100,4)) , tf.reshape(weights_PF_S_1[i,:],(1,100)) )
-new_parts, latent_mu, latent_lv = model.predict(x=inputs)
+new_parts, _, _ = model.predict(x=inputs)
 
 plt.hist(particles2_PF_1[i,:,:].numpy().flatten(), bins=30, alpha=0.5, label='Particles')
 plt.hist(new_parts.flatten(), bins=30, alpha=0.5, label='Transformed Particles', color="red")
@@ -390,6 +388,7 @@ plt.show()
 
 compute_posterior(tf.ones(Np)/Np, tf.reshape(new_parts, (100,4)))
 compute_posterior(tf.ones(Np, dtype=tf.float64)/Np, particles2_PF_1[i,:,:])
+X1[i,:]
 
 
 

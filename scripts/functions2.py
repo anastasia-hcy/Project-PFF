@@ -250,12 +250,14 @@ def LogSumExp(x):
     c               = tf.reduce_max(x) 
     return c + tf.math.log(tf.reduce_sum(tf.math.exp(x - c), axis=0))
 
-def soft_resample(N, w):
+def soft_resample(N, x, w):
     """Resample from the set of particles, x, using the weights, w, as multinomial probabilities and return the new set of particles, xbar, and the new weights, wbar.""" 
     Lamb            = tf.cast(tfd.Uniform().sample(), tf.float64)
     what            = Lamb * w + (1-Lamb) / N 
+    indices         = tfd.Categorical(probs=what).sample(N)
+    xbar            = tf.gather(x, indices)
     wbar            = w / what
-    return wbar
+    return xbar, wbar 
 
 
 ########################

@@ -47,6 +47,8 @@ get_current_process_ram_usage()
 # Simulate datasets #
 #####################
 
+# from scripts import SSM, SE_Cov_div
+
 nT              = 100
 nD              = 4
 nX              = 10
@@ -54,23 +56,18 @@ Ny              = nX - 2
 unobserved      = [3,7]
 observed        = [0,1,2,4,5,6,8,9]
 
+
 """
 Simulate non-sparse data 
 """
-
-# from scripts import SSM, SE_Cov_div
-
 # X1, Y1          = SSM(nT, nD)
-
 # A               = tf.linalg.diag(tf.constant(tf.linspace(0.5, 0.85, nD).numpy(), dtype=tf.float64))
 # Cx, _           = SE_Cov_div(nD, tf.random.normal((nD,), dtype=tf.float64))
 # X, Y            = SSM(nT, nD, model="SV", A=A, V=Cx)
 
-
 """
 Simulate sparse data 
 """
-
 # A_sparse        = tf.linalg.diag(tf.constant(tf.linspace(0.5, 0.85, nX).numpy(), dtype=tf.float64))
 # B_sparse        = tf.Variable(tf.zeros((Ny,nX), dtype=tf.float64))
 # for i,j in zip(range(Ny),observed):
@@ -80,10 +77,10 @@ Simulate sparse data
 # X_sparse, Y_sparse    = SSM(nT, nX, model="SV", n_sparse=Ny, A=A_sparse, B=B_sparse, V=Cx_sparse)
 # X1_sparse, Y1_sparse  = SSM(nT, nX, n_sparse=Ny,  B=B_sparse)
 
-"""
-Save simulated data
-"""
 
+"""
+Save/Load simulated data
+"""
 # dat = {'LG_States': X1, 'LG_Obs': Y1, 
 #        'SV_States': X, 'SV_Obs': Y, 
 #        'A': A, 'Cx': Cx, 
@@ -91,13 +88,7 @@ Save simulated data
 #        'sparse_States': X_sparse, 'sparse_Obs': Y_sparse, 
 #        'sparse_A': A_sparse, 'sparse_B': B_sparse, 'sparse_Cx': Cx_sparse}
 # with open(pathdat+"data_sim.pkl", 'wb') as file:
-#     pkl.dump(dat, file)    
-
-
-
-"""
-Load simulated data
-"""
+#     pkl.dump(dat, file)   
 
 with open(pathdat+"data_sim.pkl", 'rb') as file:
     data        = pkl.load(file)    
@@ -115,6 +106,90 @@ A_sparse        = data['sparse_A']
 B_sparse        = data['sparse_B']
 Cx_sparse       = data['sparse_Cx']
 
+
+############################################# 
+# Reproduce results using simulated dataset #
+#############################################
+
+from scripts import KalmanFilter, ExtendedKalmanFilter, UnscentedKalmanFilter
+from scripts import EDH, LEDH, KernelPFF, SDE
+from scripts import ParticleFilter, DifferentialParticleFilter
+
+start_cpu_time  = time.process_time()
+initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+X_KF            = KalmanFilter(Y1)
+
+# X1_EKF          = ExtendedKalmanFilter(Y1)
+# X_EKF           = ExtendedKalmanFilter(Y, V=Cx, model="SV")
+
+# X1_UKF          = UnscentedKalmanFilter(Y1)
+# X_UKF           = UnscentedKalmanFilter(Y, V=Cx, model="SV")
+
+# X_PF1, ess_PF1, weights_PF1, particles_PF1, particles2_PF1 = ParticleFilter(Y1, N=Np)
+# X_PF, ess_PF, weights_PF, particles_PF, particles2_PF = ParticleFilter(Y, V=Cx, model="SV", N=Np)
+
+# X_EDH_EKF_1, ess_EDH_EKF_1, weights_EDH_EKF_1, Jx_EDH_EKF_1, Jw_EDH_EKF_1 = EDH(Y1, N=Np, method='EKF')
+# X_EDH_1, ess_EDH_1, weights_EDH_1, Jx_EDH_1, Jw_EDH_1 = EDH(Y1, N=Np, method='UKF')
+# X_EDH_EKF, ess_EDH_EKF, weights_EDH_EKF, Jx_EDH_EKF, Jw_EDH_EKF = EDH(Y, V=Cx, model="SV", N=Np, method='EKF')
+# X_EDH, ess_EDH, weights_EDH, Jx_EDH, Jw_EDH = EDH(Y, V=Cx, model="SV", N=Np, method='UKF')
+
+# X_LEDH_EKF_1, ess_LEDH_EKF_1, weights_LEDH_EKF_1, Jx_LEDH_EKF_1, Jw_LEDH_EKF_1 = LEDH(Y1, N=Np, method='EKF')
+# X_LEDH_1, ess_LEDH_1, weights_LEDH_1, Jx_LEDH_SDE_1, Jw_LEDH_SDE_1 = LEDH(Y1, N=Np, method='UKF')    
+# X_LEDH_EKF, ess_LEDH_EKF, weights_LEDH_EKF, Jx_LEDH_EKF, Jw_LEDH_EKF = LEDH(Y, V=Cx, model="SV", N=Np, method='EKF')
+# X_LEDH, ess_LEDH, weights_LEDH, Jx_LEDH, Jw_LEDH = LEDH(Y, V=Cx, model="SV", N=Np, method='UKF')
+
+# X_KPFF2_1, Jx_KPFF2_1, Jw_KPFF2_1, particles_KPFF2_1, particles2_KPFF2_1    = KernelPFF(Y1_sparse, Nx=nX, N=Np, B=B_sparse, method="scalar")
+# X_KPFF_1, Jx_KPFF_1, Jw_KPFF_1, particles_KPFF_1, particles2_KPFF_1         = KernelPFF(Y1_sparse, Nx=nX, N=Np, B=B_sparse)
+
+# X_KPFF2, Jx_KPFF2, Jw_KPFF2, particles_KPFF2, particles2_KPFF2 = KernelPFF(Y_sparse, model="SV", Nx=nX, B=B_sparse, N=Np, Sigma0=tf.eye(nX, dtype=tf.float64), method="scalar")
+# X_KPFF, Jx_KPFF, Jw_KPFF, particles_KPFF, particles2_KPFF = KernelPFF(Y_sparse, model="SV", Nx=nX, B=B_sparse, N=Np, Sigma0=tf.eye(nX, dtype=tf.float64))
+ 
+# X_SDE_1, cond_1, stiff_1, beta_1 = SDE(Y1, N=N)
+# X_SDE_homo_1, cond_homo_1, stiff_homo_1, beta_homo_1 = SDE(Y1, N=Np, linear=False)
+
+# X_LEDH_SDE_EKF_1, ess_LEDH_SDE_EKF_1, weights_LEDH_SDE_EKF_1, Jx_LEDH_SDE_EKF_1, Jw_LEDH_SDE_EKF_1 = LEDH(Y1, N=Np, Nstep=50, method='EKF', stochastic=True)
+# X_LEDH_SDE_1, ess_LEDH_SDE_1, weights_LEDH_SDE_1, Jx_LEDH_SDE_1, Jw_LEDH_SDE_1 = LEDH(Y1, N=Np, Nstep=50, method='UKF', stochastic=True)    
+
+# X_DPF_1, ess_DPF_1, weights_DPF_1, particles_DPF_1, particles2_DPF_1 = DifferentialParticleFilter(Y1, N=Np)
+# X_DPF_MH_1, ess_DPF_MH_1, weights_DPF_MH_1, particles_DPF_MH_1, particles2_DPF_MH_1 = DifferentialParticleFilter(Y1, N=Np, backpropagation="Multi-Head")
+
+final_rss       = psutil.Process(os.getpid()).memory_info().rss
+memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+end_cpu_time    = time.process_time()
+cpu_time_taken  = end_cpu_time - start_cpu_time
+
+print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
+print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
+
+
+
+
+
+
+
+
+
+
+
+
+
+######### 
+# Plots #
+######### 
+
+def cumulative_mse(nTimes, xhat, x):
+    mseSum = np.cumsum(np.mean(np.square(xhat - x), axis=-1))
+    counts = np.arange(1,nTimes+1,1)
+    return mseSum / counts
+
+mse_sde_1 = cumulative_mse(nT, X_SDE_1, X1)
+mse_ledh_1 = cumulative_mse(nT, X_LEDH_EKF_1, X1)
+
+plt.plot(mse_sde_1)
+plt.plot(mse_ledh_1)
+plt.show()
 
 """
 Plots simulated data
@@ -212,7 +287,6 @@ plt.show()
 EKF - LG
 """
 # X1_EKF          = ExtendedKalmanFilter(Y1)
-
 
 """
 EKF - SV
@@ -324,29 +398,7 @@ plt.show()
 # Standard Particle Filter #
 ############################ 
 
-from scripts import ParticleFilter
-Np              = 100
-
-X_PF_S_1, ess_PF_S_1, weights_PF_S_1, particles_PF_S_1, particles2_PF_S_1 = ParticleFilter(Y1, N=Np, resample="Soft")
-# X_PF_S2_1, ess_PF_S2_1, weights_PF_S2_1, particles_PF_S2_1, particles2_PF_S2_1 = ParticleFilter(Y1, N=Np, resample="Soft", backpropagation=True)
-
-fig, ax = plt.subplots(figsize=(6,4))
-for i in range(nD):
-    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_PF1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
-    plt.plot(X_PF_S_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
-    # plt.plot(X_PF_S2_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
-plt.show() 
-
-
-X_PF_OT_1, ess_PF_OT_1, weights_PF_OT_1, particles_PF_OT_1, particles2_PF_OT_1 = ParticleFilter(Y1, N=Np, resample="OT")
-
-                  
-fig, ax = plt.subplots(figsize=(6,4))
-for i in range(nD):
-    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_PF_OT_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange')     
-plt.show() 
+# from scripts import ParticleFilter
                                                                                                                     
 
 """
@@ -354,6 +406,7 @@ PF - LG
 """
 
 # X_PF1, ess_PF1, weights_PF1, particles_PF1, particles2_PF1 = ParticleFilter(Y1, N=Np)
+# X_PF, ess_PF, weights_PF, particles_PF, particles2_PF = ParticleFilter(Y, V=Cx, model="SV", N=Np)
 
 """
 PF - SV
@@ -456,6 +509,36 @@ plt.show()
 
 
 
+################################## 
+# Differentiable Particle Filter #
+################################## 
+
+from scripts import DifferentialParticleFilter
+                                               
+Np              = 100
+
+X_DPF_1, ess_DPF_1, weights_DPF_1, particles_DPF_1, particles2_DPF_1 = DifferentialParticleFilter(Y1, N=Np)
+X_DPF_MH_1, ess_DPF_MH_1, weights_DPF_MH_1, particles_DPF_MH_1, particles2_DPF_MH_1 = DifferentialParticleFilter(Y1, N=Np, backpropagation="Multi-Head")
+
+fig, ax = plt.subplots(figsize=(6,4))
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_DPF_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
+    plt.plot(X_DPF_MH_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red')  
+plt.show() 
+
+
+X_DPF, ess_DPF, weights_DPF, particles_DPF, particles2_DPF = DifferentialParticleFilter(Y, model="SV", N=Np, A=A, V=Cx)
+X_DPF_MH, ess_DPF_MH, weights_DPF_MH, particles_DPF_MH, particles2_DPF_MH = DifferentialParticleFilter(Y, model="SV", N=Np, A=A, V=Cx, backpropagation="Multi-Head")
+
+fig, ax = plt.subplots(figsize=(6,4))
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_DPF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
+    plt.plot(X_DPF_MH[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red')  
+plt.show() 
+        
+
 
 
 #######
@@ -471,6 +554,7 @@ EDH - LG
 
 # X_EDH_EKF_1, ess_EDH_EKF_1, weights_EDH_EKF_1, Jx_EDH_EKF_1, Jw_EDH_EKF_1 = EDH(Y1, N=Np, method='EKF')
 # X_EDH_1, ess_EDH_1, weights_EDH_1, Jx_EDH_1, Jw_EDH_1 = EDH(Y1, N=Np, method='UKF')
+
 
 """
 EDH - SV 
@@ -544,8 +628,7 @@ for i in range(nD):
     plt.plot(X_EDH_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
 plt.show() 
  
- 
- 
+
 
  
 #######
@@ -592,7 +675,7 @@ beta_SDE_1_homo = res_SDE['beta']
 for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
     plt.plot(X_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    # plt.plot(X_SDE_1_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
+    plt.plot(X_SDE_1_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
 plt.show() 
 
 for i in range(nD):
@@ -638,6 +721,20 @@ Jx_LEDH_EKF_1      = res_LEDH['Jx_testLG_EKF']
 Jw_LEDH_EKF_1      = res_LEDH['Jw_testLG_EKF']
 
 
+for i in range(nD):
+    plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
+    plt.plot(X_LEDH_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
+plt.show() 
+
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
+    plt.plot(X_LEDH_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
+    plt.plot(X_LEDH_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
+plt.show() 
+
+
+
 with open(pathdat+"res_LEDH_SDE_EKF_LG.pkl", 'rb') as file:
     res_LEDH = pkl.load(file)
     
@@ -677,23 +774,10 @@ Jw_LEDH_SDE         = res_LEDH['Jw']
 
 for i in range(nD):
     plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    plt.plot(X_LEDH_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
-plt.show() 
-
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
-    # plt.plot(X_LEDH_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue')
+    plt.plot(X_LEDH_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue')
     plt.plot(X_LEDH_SDE_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='purple')
 plt.show() 
     
-
-for i in range(nD):
-    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_LEDH_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    plt.plot(X_LEDH_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
-plt.show() 
-
 for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
     plt.plot(X_LEDH_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red')
@@ -722,7 +806,6 @@ KPFF - LG
 """
 
 # X_KPFF2_1, Jx_KPFF2_1, Jw_KPFF2_1, particles_KPFF2_1, particles2_KPFF2_1    = KernelPFF(Y1_sparse, Nx=nX, N=Np, B=B_sparse, method="scalar")
-# X_KPFF_1, Jx_KPFF_1, Jw_KPFF_1, particles_KPFF_1, particles2_KPFF_1         = KernelPFF(Y1_sparse, Nx=nX, N=Np, B=B_sparse)
 
 """
 KPFF - SV
