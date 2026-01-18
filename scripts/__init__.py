@@ -19,9 +19,9 @@ from .functions import Hu21eq13, Hu21eq15, KPFF_LP, KPFF_RKHS, KPFF_flow, Kernel
 
 from .functions2 import post_cov, post_mean, Dai22eq28, initial_solve_err, final_solve, Dai22eq22, stiffness_ratio, JacobiLogNormal, HessianLogNormal, Dai22eq11eq12, drift_f, sde_flow_dynamics, SDE
 from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics
+from .functions2 import soft_resample, LogSumExp, ot_resample, cost_matrix
 
-from .functions2 import soft_resample, LogSumExp
-from .functions2 import ot_resample, cost_matrix
+from .functions3 import DifferentialParticleFilter
 
 # Define package-level variables
 # __version__ = "1.0.0"
@@ -47,10 +47,10 @@ __all__ = ["SE_kernel", "SE_kernel_divC", "SE_Cov_div",
            "Hu21eq13", "Hu21eq15", "KPFF_LP", "KPFF_RKHS", "KPFF_flow", "KernelPFF",
            
            "post_cov", "post_mean", "Dai22eq28", "initial_solve_err", "final_solve", "Dai22eq22", "stiffness_ratio", "JacobiLogNormal", "HessianLogNormal", "Dai22eq11eq12", "drift_f", "sde_flow_dynamics", "SDE",
-           "LEDH_SDE_Hessians", "LEDH_SDE_flow_dynamics", 
+           "LEDH_SDE_Hessians", "LEDH_SDE_flow_dynamics",            
+           "LogSumExp", "soft_resample", "ot_resample", "cost_matrix", 
            
-           "LogSumExp", 
-           "soft_resample", "ot_resample", "cost_matrix", "OT_matrix"]
+           "DifferentialParticleFilter"]
 
 
 

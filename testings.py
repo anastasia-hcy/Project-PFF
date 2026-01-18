@@ -696,12 +696,7 @@ class TestPF(unittest.TestCase):
     def test_soft_resample(self):
         
         w0              = tf.ones((self.Np,), dtype=tf.float64) / self.Np
-        particles       = initiate_particles(self.Np, self.nD, self.mu0, self.Sigma0)
-        xbar, wbar      = soft_resample(self.Np, particles, w0)        
-        
-        self.assertEqual(xbar.shape, (self.Np, self.nD))
-        self.assertTrue(tf.reduce_all(wbar <= 1.0))
-        self.assertTrue(isinstance(xbar, tf.Tensor))
+        wbar            = soft_resample(self.Np, w0)        
         self.assertTrue(isinstance(wbar, tf.Tensor))
 
     def test_compute_posterior(self):
@@ -1676,6 +1671,109 @@ class TestSDE(unittest.TestCase):
         self.assertTrue(tf.reduce_all(tf.math.is_finite(cond2)))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(stiff2)))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(betas2)))
+        
 
+class TestDPF(unittest.TestCase):
+
+
+    def setUp(self):
+        
+        self.Np         = 5
+        self.nD         = 3
+        self.nT         = 5
+
+        self.X          = tf.random.normal((self.nD,), dtype=tf.float64)
+        self.Y          = tf.random.normal((self.nD,), dtype=tf.float64)
+       
+        self.A          = tf.linalg.diag(tf.random.uniform((self.nD,), -0.99, 0.99, dtype=tf.float64))
+        self.B          = tf.linalg.diag(tf.random.uniform((self.nD,), -10.0, 10.0, dtype=tf.float64))
+        self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
+        self.W          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
+
+    def test_dpf(self):
+        
+        _, Y                                = SSM(self.nT, self.nD)
+        X_filtered, ESS, Weights, xParts, xParts2 = DifferentialParticleFilter(y=Y, N=self.Np)
+        X_filtered1, ESS1, Weights1, xParts1, xParts2v1 = DifferentialParticleFilter(y=Y, N=self.Np, backpropagation="Multi-Head")
+        
+        _, Y2                                = SSM(self.nT, self.nD, model="SV", A=self.A, B=self.B, V=self.V, W=self.W)
+        X_filtered2, ESS2, Weights2, xPartsv2, xParts2v2    = DifferentialParticleFilter(y=Y2, model="SV", N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W)
+        X_filtered3, ESS3, Weights3, xPartsv3, xParts2v3    = DifferentialParticleFilter(y=Y2, model="SV", N=self.Np, A=self.A, B=self.B, V=self.V, W=self.W, backpropagation="Multi-Head")
+        
+
+        self.assertEqual(X_filtered.shape, (self.nT, self.nD))
+        self.assertEqual(ESS.shape, (self.nT,))
+        self.assertEqual(Weights.shape, (self.nT,self.Np))
+        self.assertEqual(xParts.shape, (self.nT,self.Np,self.nD))
+        self.assertEqual(xParts2.shape, (self.nT,self.Np,self.nD))
+
+        self.assertEqual(X_filtered1.shape, (self.nT, self.nD))
+        self.assertEqual(ESS1.shape, (self.nT,))
+        self.assertEqual(Weights1.shape, (self.nT,self.Np))
+        self.assertEqual(xParts1.shape, (self.nT,self.Np,self.nD))
+        self.assertEqual(xParts2v1.shape, (self.nT,self.Np,self.nD))
+        
+        self.assertEqual(X_filtered2.shape, (self.nT, self.nD))
+        self.assertEqual(ESS2.shape, (self.nT,))
+        self.assertEqual(Weights2.shape, (self.nT,self.Np))
+        self.assertEqual(xPartsv2.shape, (self.nT,self.Np,self.nD))
+        self.assertEqual(xParts2v2.shape, (self.nT,self.Np,self.nD))
+
+        self.assertEqual(X_filtered3.shape, (self.nT, self.nD))
+        self.assertEqual(ESS3.shape, (self.nT,))
+        self.assertEqual(Weights3.shape, (self.nT,self.Np))
+        self.assertEqual(xPartsv3.shape, (self.nT,self.Np,self.nD))
+        self.assertEqual(xParts2v3.shape, (self.nT,self.Np,self.nD))
+        
+        self.assertTrue(isinstance(X_filtered, tf.Variable))
+        self.assertTrue(isinstance(ESS, tf.Variable))
+        self.assertTrue(isinstance(Weights, tf.Variable))
+        self.assertTrue(isinstance(xParts, tf.Variable))
+        self.assertTrue(isinstance(xParts2, tf.Variable))
+        
+        self.assertTrue(isinstance(X_filtered1, tf.Variable))
+        self.assertTrue(isinstance(ESS1, tf.Variable))
+        self.assertTrue(isinstance(Weights1, tf.Variable))
+        self.assertTrue(isinstance(xParts1, tf.Variable))
+        self.assertTrue(isinstance(xParts2v1, tf.Variable))
+        
+        self.assertTrue(isinstance(X_filtered2, tf.Variable))
+        self.assertTrue(isinstance(ESS2, tf.Variable))
+        self.assertTrue(isinstance(Weights2, tf.Variable))
+        self.assertTrue(isinstance(xPartsv2, tf.Variable))
+        self.assertTrue(isinstance(xParts2v2, tf.Variable))
+        
+        self.assertTrue(isinstance(X_filtered3, tf.Variable))
+        self.assertTrue(isinstance(ESS3, tf.Variable))
+        self.assertTrue(isinstance(Weights3, tf.Variable))
+        self.assertTrue(isinstance(xPartsv3, tf.Variable))
+        self.assertTrue(isinstance(xParts2v3, tf.Variable))
+
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered)))
+        self.assertTrue(tf.reduce_all(Weights <= 1.0))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(ESS)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xParts)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xParts2)))
+        
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered1)))
+        self.assertTrue(tf.reduce_all(Weights1 <= 1.0))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(ESS1)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xParts1)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xParts2v1)))
+
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered2)))
+        self.assertTrue(tf.reduce_all(Weights2 <= 1.0))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(ESS2)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xPartsv2)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xParts2v2)))
+
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered3)))
+        self.assertTrue(tf.reduce_all(Weights3 <= 1.0))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(ESS3)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xPartsv3)))
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(xParts2v3)))
+
+        
+        
 if __name__ == '__main__':
     unittest.main()

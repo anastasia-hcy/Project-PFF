@@ -440,6 +440,7 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         
     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
     resample        = True if resample is None else resample
+        
     N               = 1000 if N is None else N
     NT              = N/2
     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
@@ -466,7 +467,7 @@ def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resamp
         ness        = compute_ESS(w_norm)
         ESS[i].assign(ness)
         
-        if resample == "Multinomial" and ness < NT: 
+        if resample and ness < NT: 
             xbar, wbar  = multinomial_resample(N, x_pred, w_norm)
         elif ness >= NT:
             xbar        = x_pred

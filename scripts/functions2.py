@@ -250,14 +250,12 @@ def LogSumExp(x):
     c               = tf.reduce_max(x) 
     return c + tf.math.log(tf.reduce_sum(tf.math.exp(x - c), axis=0))
 
-def soft_resample(N, x, w):
+def soft_resample(N, w):
     """Resample from the set of particles, x, using the weights, w, as multinomial probabilities and return the new set of particles, xbar, and the new weights, wbar.""" 
     Lamb            = tf.cast(tfd.Uniform().sample(), tf.float64)
     what            = Lamb * w + (1-Lamb) / N 
-    indices         = tfd.Categorical(probs=what).sample(N)
-    xbar            = tf.gather(x, indices)
     wbar            = w / what
-    return xbar, wbar
+    return wbar
 
 
 ########################
@@ -272,40 +270,42 @@ def cost_matrix(vectors1, vectors2):
     M               = tf.norm(differences, ord='euclidean', axis=-1)
     return M / tf.reduce_max(M)
 
-def ot_resample(N, x, w, C, reg=0.1):
+
+def sinkhorn_tf(a, b, C, reg=0.1, num_iter=100):
+    """Compute and return the optimal transport matrix."""
+    log_K = - C / reg
+    
+    u = tf.ones_like(a)
+    v = tf.ones_like(b)
+    log_u = tf.zeros_like(a) 
+    log_v = tf.zeros_like(b) 
+    
+    for i in range(num_iter):
+        log_u = tf.math.log(a) - LogSumExp(log_K + log_v[:,tf.newaxis]) 
+        log_v = tf.math.log(b) - LogSumExp(log_K + log_u[:, tf.newaxis] + log_v[:, tf.newaxis])
+        u = tf.math.exp(log_u)
+        v = tf.math.exp(log_v)
+        
+    P = tf.linalg.diag(u) @ tf.math.exp(log_K) @ tf.linalg.diag(v)
+    return P    
+    
+def ot_resample(N, x, w, C):
     """Resample from the set of particles, x, using the weights, w, as multinomial probabilities and return the new set of particles, xbar, and the new weights, wbar."""
     Lamb            = tf.cast(tfd.Uniform().sample(), tf.float64)
     what            = Lamb * w + (1-Lamb) / N
-    POT             = tf.constant(sinkhorn(w.numpy(), what.numpy(), C.numpy(), reg=reg), dtype=tf.float64)
+    POT             = sinkhorn_tf(w, what, C)
     xbar            = POT @ x
     wbar            = w / what
-    return xbar, wbar, POT
+    return xbar, wbar 
 
+# def ot_cv_score(w, x, xpred, SigmaX_inv, SigmaX_det):
+#     xdiff           = x - xpred
+#     xSum            = - 1/2 * tf.reduce_sum(xdiff @ SigmaX_inv * xdiff, axis=-1)      
+#     loglike         = w * ( SigmaX_det + LogSumExp(xSum) ) 
+#     return tf.reduce_sum(loglike)
 
-
-
-
-
-
-
-
-
-
-def ot_cv_score(w, x, xpred, SigmaX_inv, SigmaX_det):
-    xdiff           = x - xpred
-    xSum            = - 1/2 * tf.reduce_sum(xdiff @ SigmaX_inv * xdiff, axis=-1)      
-    loglike         = w * ( SigmaX_det + LogSumExp(xSum) ) 
-    return tf.reduce_sum(loglike)
-
-def ot_grid(num_reg=100):
-    x               = tf.cast(tf.linspace(1e-3, 1, num_reg), tf.float64)
-    return x
-
-
-
-
-
-
-
+# def ot_grid(num_reg=100):
+#     x               = tf.cast(tf.linspace(1e-3, 1, num_reg), tf.float64)
+#     return x
 
 

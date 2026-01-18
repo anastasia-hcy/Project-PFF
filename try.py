@@ -25,9 +25,9 @@ tfd = tfp.distributions
 tf.random.set_seed(123)
 
 import keras
+import keras_tuner
 from keras import layers, Loss, ops
-# import keras_tuner 
-from scripts import ParticleFilter, compute_posterior
+from scripts import ParticleFilter, compute_posterior, cost_matrix
 
 with open(pathdat+"data_sim.pkl", 'rb') as file:
     data        = pkl.load(file)    
@@ -38,55 +38,25 @@ Np              = 100
 nT, nD          = X1.shape
 
 X_PF_1, ess_PF_1, weights_PF_1, particles_PF_1, particles2_PF_1 = ParticleFilter(Y1, N=Np)
-X_PF_S_1, ess_PF_S_1, weights_PF_S_1, particles_PF_S_1, particles2_PF_S_1 = ParticleFilter(Y1, N=Np, resample="Soft")
-# X_PF_OT_1, ess_PF_OT_1, weights_PF_OT_1, particles_PF_OT_1, particles2_PF_OT_1 = ParticleFilter(Y1, N=Np, resample="OT")
-
 fig, ax = plt.subplots(figsize=(6,4))
 for i in range(nD):
     plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_PF_S_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
     plt.plot(X_PF_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
-    # plt.plot(X_PF_OT_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='yellow') 
 plt.show() 
 
 
-
-
-rnn_layer =  layers.LSTM(64)
-x = tf.random.uniform((5,100,4)) 
-rnn_layer(x).shape
-
-
-
-
-
-class particles_loss(Loss):
+class SimpleFNN(keras.Model):
     
-    def __init__(self, w, SigmaX, reduction="sum_over_batch_size", name='particles_loss'):
-        super(particles_loss, self).__init__(reduction=reduction, name=name)
-        self.w = w
+    def __init__(self, SigmaX, ndim):
+        super().__init__()
         self.SigmaX = SigmaX
         self.SigmaX_inv = ops.linalg.inv(SigmaX)
         self.SigmaX_det = ops.log( tf.math.sqrt(tf.linalg.det(SigmaX)) )
-
-    def LogSumExp(self, x):
-        c               = tf.reduce_max(x) 
-        return c + ops.log(tf.reduce_sum(tf.math.exp(x - c), axis=0))
-    
-    def call(self, y, y_pred):
-        diff = y_pred - y
-        diffSum = ops.log(self.w) - 1/2 * tf.reduce_sum( diff @ self.SigmaX_inv * diff, axis=-1) 
-        loss =  - ops.mean(- self.SigmaX_det + self.LogSumExp(diffSum))
-        return loss
-
-class SimpleRNN(keras.Model):
-    
-    def __init__(self, ndim):
-        super().__init__()
-        self.rnn = keras.Sequential([
+        self.fnn = keras.Sequential([
+            layers.Dense(32, activation="tanh"), 
+            layers.Dense(64, activation="relu"), 
             layers.Dense(32), 
-            layers.LSTM(ndim), 
-            layers.Dense(1) 
+            layers.Dense(ndim)
         ])
         
     def LogSumExp(self, x):
@@ -94,29 +64,187 @@ class SimpleRNN(keras.Model):
         return c + ops.log(ops.sum(ops.exp(x - c), axis=0))
         
     def call(self, x):   
-        x = self.rnn(x)
-        return x
+        return self.fnn(x[0])
 
     def train_step(self, data):
-        x, y = data      
-        with tf.GradientTape() as tape:     
-            y_pred = self(x) 
-            loss = self.compute_loss(y=y, y_pred=y_pred) 
+        x, y = data
+        with tf.GradientTape() as tape:      
+            y_pred = self(x)  
+            diff = y_pred - y
+            diffSum =  - 1/2 * ops.sum( diff @ self.SigmaX_inv * diff, axis=-1) 
+            loss =  - ops.sum(x[1] * ( - self.SigmaX_det + self.LogSumExp(diffSum)))
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
         return {"loss": loss}
 
 Sigma0 = tf.eye(nD)
-w0 = tf.cast(weights_PF_S_1, tf.float32)
 optimizer = keras.optimizers.SGD(1e-3)
-model = SimpleRNN()
-loss_fun = particles_loss(w=w0, SigmaX=Sigma0)
-model.compile(optimizer=optimizer, loss=loss_fun)
-model.fit(x=particles_PF_S_1, y=particles2_PF_1, verbose=1, epochs=10)
+model = SimpleFNN(Sigma0, nD)
+model.compile(optimizer=optimizer)
+model.fit(x=(particles_PF_1, weights_PF_1), y=particles2_PF_1, verbose=1, epochs=10)
 
-i = 20
-new_parts, latent_mu, latent_lv = model.predict(tf.reshape(particles_PF_S_1[i,:,:],(1,100,4)))
 
+
+i = 30
+inputs = ( tf.reshape(particles_PF_S_1[i,:,:],(1,100,4)) , tf.reshape(weights_PF_S_1[i,:],(1,100)) )
+new_parts = model.predict(x=inputs)
+
+plt.hist(particles2_PF_1[i,:,:].numpy().flatten(), bins=30, alpha=0.5, label='Particles')
+plt.hist(new_parts.flatten(), bins=30, alpha=0.5, label='Transformed Particles', color="red")
+plt.show() 
+
+compute_posterior(tf.ones(Np)/Np, tf.reshape(new_parts, (100,4)))
+compute_posterior(tf.ones(Np, dtype=tf.float64)/Np, particles2_PF_1[i,:,:])
+
+
+
+
+
+
+class SimpleFNN_OT(keras_tuner.HyperModel):
+    
+    def __init__(self, SigmaX, ndim):
+        super().__init__()
+        self.ndim   = ndim
+        self.SigmaX = SigmaX
+        self.SigmaX_inv = ops.linalg.inv(SigmaX)
+        self.SigmaX_det = ops.log( tf.math.sqrt(tf.linalg.det(SigmaX)) )
+        self.fnn = keras.Sequential([
+            layers.Dense(32, activation="tanh"), 
+            layers.Dense(64, activation="relu"), 
+            layers.Dense(32), 
+            layers.Dense(ndim)
+        ])
+        
+    def LogSumExp(self, x):
+        c               = ops.max(x) 
+        return c + ops.log(ops.sum(ops.exp(x - c), axis=0))
+    
+    def Sinkhorn(self, a, b, C, reg, num_iter):
+        log_K = - C / reg
+        
+        u = tf.ones_like(a)
+        v = tf.ones_like(b)
+        log_u = tf.zeros_like(a) 
+        log_v = tf.zeros_like(b) 
+        
+        for _ in range(num_iter):
+            log_u = tf.math.log(a) - self.LogSumExp(log_K + log_v[:,tf.newaxis]) 
+            log_v = tf.math.log(b) - self.LogSumExp(log_K + log_u[:, tf.newaxis] + log_v[:, tf.newaxis])
+            u = tf.math.exp(log_u)
+            v = tf.math.exp(log_v)
+            
+        P = tf.linalg.diag(u) @ tf.math.exp(log_K) @ tf.linalg.diag(v)
+        return P
+            
+    def build(self, hp):
+        inputs = keras.Input(shape=(None,self.ndim))     
+        x = self.fnn(inputs)
+        return keras.Model(inputs=inputs, outputs=x)
+    
+    def fit(self, hp, model, x, y, validation_data, callbacks=None):
+        
+        inds = ops.reshape(ops.arange(len(x[1]), dtype=tf.float32), (-1,1))
+        C = cost_matrix(inds,inds)
+        
+        niter = hp.Int("num_iter", min_value=100, max_value=1000, default=100)
+        reg = hp.Float("reg", min_value=1e-3, max_value=1.0, default=0.1)
+        POT = self.Sinkhorn(x[1], x[2], C, reg=reg, num_iter=niter)   
+        
+        optimizer = keras.optimizers.SGD(1e-3)
+        epoch_loss_metric = keras.metrics.MeanSquaredError()
+        
+        def run_train_step(x, y, P):
+            with tf.GradientTape() as tape:
+                y_pred = model(P @ x[0])
+                diff = y_pred - y
+                diffSum =  - 1/2 * ops.sum( diff @ self.SigmaX_inv * diff, axis=-1) 
+                loss =  - ops.sum(x[1] * ( - self.SigmaX_det + self.LogSumExp(diffSum)))
+            gradients = tape.gradient(loss, self.trainable_variables)
+            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+
+        def run_val_step(x, y, P):
+            y_pred = model(P @ x[0])
+            diff = y_pred - y
+            diffSum = - 1/2 * ops.sum( diff @ self.SigmaX_inv * diff, axis=-1) 
+            loss = - ops.sum(x[1] * ( - self.SigmaX_det + self.LogSumExp(diffSum)))
+            epoch_loss_metric.update_state(loss)
+
+        for callback in callbacks:
+            callback.set_model(model)
+            
+        best_epoch_loss = float("inf")
+
+        for epoch in range(10):
+            print(f"Epoch: {epoch}")
+            
+            run_train_step(x, y, POT)
+            for xv, yv in validation_data:
+                run_val_step(xv, yv, POT)
+
+            epoch_loss = float(epoch_loss_metric.result().numpy())
+            for callback in callbacks:
+                callback.on_epoch_end(epoch, logs={"my_metric": epoch_loss})
+            epoch_loss_metric.reset_state()
+
+            print(f"Epoch loss: {epoch_loss}")
+            best_epoch_loss = min(best_epoch_loss, epoch_loss)
+
+        return best_epoch_loss
+
+
+Sigma0 = tf.eye(nD)
+tuner = keras_tuner.RandomSearch(
+    objective=keras_tuner.Objective("my_metric", "min"),
+    max_trials=10,
+    hypermodel=SimpleFNN_OT(Sigma0, nD),
+    directory="results",
+    project_name="custom_training",
+    overwrite=True,
+)
+
+i = 10
+split = int(Np*0.8)
+x_train = (tf.cast(particles_PF_1[i,:split,:], dtype=tf.float32), 
+           tf.cast(weights_PF_1[i,:split], dtype=tf.float32), 
+           tf.cast(weights_PF_S_1[i,:split], dtype=tf.float32)
+)
+y_train = tf.cast(particles2_PF_1[i,:split,:], dtype=tf.float32)
+x_val = (tf.cast(particles_PF_1[i,split:,:], dtype=tf.float32), 
+           tf.cast(weights_PF_1[i,split:], dtype=tf.float32), 
+           tf.cast(weights_PF_S_1[i,split:], dtype=tf.float32)
+)
+y_val = tf.cast(particles2_PF_1[i,split:,:], dtype=tf.float32)
+tuner.search(x=x_train, 
+             y=y_train, 
+             validation_data=(x_val, y_val)
+)
+
+best_hps = tuner.get_best_hyperparameters()[0]
+print(best_hps.values)
+
+best_model = tuner.get_best_models()[0]
+best_model.summary()
+
+
+model = SimpleFNN(Sigma0, nD)
+model.compile(optimizer=optimizer)
+model.fit(x=(particles_PF_1, weights_PF_1, tf.ones((Np,Np), dtype=tf.float64)/Np), y=particles2_PF_1, verbose=1, epochs=10)
+
+best_model = tuner.get_best_models()[0]
+best_model.summary()
+
+
+i = 30
+inputs = ( tf.reshape(particles_PF_S_1[i,:,:],(1,100,4)) , tf.reshape(weights_PF_S_1[i,:],(1,100)) )
+new_parts = model.predict(x=inputs)
+
+plt.hist(particles2_PF_1[i,:,:].numpy().flatten(), bins=30, alpha=0.5, label='Particles')
+plt.hist(new_parts.flatten(), bins=30, alpha=0.5, label='Transformed Particles', color="red")
+plt.show() 
+
+compute_posterior(tf.ones(Np)/Np, tf.reshape(new_parts, (100,4)))
+compute_posterior(tf.ones(Np, dtype=tf.float64)/Np, particles2_PF_1[i,:,:])
 
 
 
@@ -301,19 +429,29 @@ query, _, key, _, val, _, out, _ = attention.get_weights()
     
     
 
-x = tf.random.uniform((5,100,4)) 
-cnn_layer = layers.Conv2D()
+x = tf.random.uniform((5, 100, 4, 1)) 
+cnn_layer = layers.Conv2D(32, (5, 5), activation='relu')
+cnn_layer(x).shape
+
+
+inputs = layers.Input(shape=(100,4,1))
+x = layers.Conv2D(32, (5, 5), activation='relu')(inputs)
+x = layers.MaxPooling2D((2, 2))(x)
+x = layers.Conv2D(16, (5, 5), activation='relu')(x)
+x = layers.MaxPooling2D((2, 2))(x)
+outputs = layers.Dense(32, activation='linear')(x)  # 6 params for affine transformation
+model = keras.Model(inputs, outputs)
+model.summary()
+model(x)
+
 
 latent_dim = 4
 encoder_inputs = keras.Input(shape=(100, 4, 1))
 x = layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
 x = layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
 x = layers.Flatten()(x)
-x = layers.Dense(16, activation="relu")(x)
-z_mean = layers.Dense(latent_dim, name="z_mean")(x)
-z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
-z = Sampling()([z_mean, z_log_var])
-encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
+outputs = layers.Dense(6, activation="relu")(x)
+encoder = keras.Model(encoder_inputs, outputs, name="encoder")
 encoder.summary()   
     
 latent_inputs = keras.Input(shape=(latent_dim,))
@@ -559,6 +697,26 @@ model2.fit(x=w1[:,tf.newaxis], y=w2, verbose=1)
 model2.predict(w2[:,tf.newaxis])
 
 
+
+
+class particles_loss(Loss):
+    
+    def __init__(self, w, SigmaX, reduction="sum_over_batch_size", name='particles_loss'):
+        super(particles_loss, self).__init__(reduction=reduction, name=name)
+        self.w = w
+        self.SigmaX = SigmaX
+        self.SigmaX_inv = ops.linalg.inv(SigmaX)
+        self.SigmaX_det = ops.log( tf.math.sqrt(tf.linalg.det(SigmaX)) )
+
+    def LogSumExp(self, x):
+        c               = tf.reduce_max(x) 
+        return c + ops.log(tf.reduce_sum(tf.math.exp(x - c), axis=0))
+    
+    def call(self, y, y_pred):
+        diff = y_pred - y
+        diffSum = ops.log(self.w) - 1/2 * tf.reduce_sum( diff @ self.SigmaX_inv * diff, axis=-1) 
+        loss =  - ops.mean(- self.SigmaX_det + self.LogSumExp(diffSum))
+        return loss
 
 
 
