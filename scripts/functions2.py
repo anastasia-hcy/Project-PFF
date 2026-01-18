@@ -10,12 +10,6 @@ from scipy.optimize import fsolve
 from ot import sinkhorn
 from .model import initiate_particles, norm_rvs, measurements_pred
 
-
-# ta = tf.TensorArray(tf.float64, size=0, dynamic_size=True, clear_after_read=False)
-# for i in range(2):
-#     ta = ta.write(i, tf.ones(2, dtype=tf.float64))
-# ta.stack().shape
-
 ############################
 # Stochastic Particle Flow # 
 ############################
