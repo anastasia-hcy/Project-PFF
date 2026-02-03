@@ -2,7 +2,7 @@
 # Set directory #
 #################
 
-path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM"
+path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/"
 
 import os, sys
 os.chdir(path)
@@ -256,9 +256,11 @@ class TestKF(unittest.TestCase):
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64)) 
         self.W          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
 
+        self.KF         = KalmanFilter(nTimes=self.nT, ndims=self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
+
     def test_kf_predict(self):
 
-        x, P            = KF_Predict(self.Xprev, self.P, self.A, self.V)
+        x, P            = self.KF.Predict(self.Xprev, self.P, self.A, self.V)
         expected_x      = tf.linalg.matvec(self.A, self.Xprev)
         expected_P      = self.A @ self.P @ tf.transpose(self.A) + self.V
 
@@ -273,7 +275,7 @@ class TestKF(unittest.TestCase):
 
     def test_kf_gain(self):
 
-        K               = KF_Gain(self.P, self.B, self.W)
+        K               = self.KF.Gain(self.P, self.B, self.W)
         M               = self.P @ tf.transpose(self.B) 
         Minv            = tf.linalg.inv(self.B @ M + self.W)
         expected_K      = M @ Minv
@@ -285,8 +287,8 @@ class TestKF(unittest.TestCase):
     def test_kf_filter(self):
 
         y_pred          = tf.linalg.matvec(self.B, self.Xprev)
-        K               = KF_Gain(self.P, self.B, self.W)
-        x, P            = KF_Filter(self.Xprev, self.P, self.Y, y_pred, self.B, K)
+        K               = self.KF.Gain(self.P, self.B, self.W)
+        x, P            = self.KF.Filter(self.Xprev, self.P, self.Y, y_pred, self.B, K)
 
         expected_x      = self.Xprev + tf.linalg.matvec(K, self.Y - y_pred)
         expected_P      = self.P - self.P @ tf.transpose(self.B) @ tf.transpose(K)
@@ -303,7 +305,7 @@ class TestKF(unittest.TestCase):
     def test_kalman_filter(self):
         
         _, Y            = SSM(self.nT, self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
-        X_filtered      = KalmanFilter(y=Y, A=self.A, B=self.B, V=self.V, W=self.W)
+        X_filtered      = self.KF.run(y=Y) 
 
         self.assertEqual(X_filtered.shape, (self.nT, self.nD))
         self.assertTrue(isinstance(X_filtered, tf.Variable))

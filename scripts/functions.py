@@ -8,12 +8,6 @@ tf.random.set_seed(123)
 from .model import initiate_particles, norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
 from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics, soft_resample
 
-
-##########################
-# Extended Kalman Filter # 
-##########################
-
-
 def EKF_Predict(x_prev, P_prev, A, V):
     "Predict and return the system state and covariance matrix, x and P, given the previous, x_prev and P_prev."
     x               = tf.linalg.matvec(A, x_prev)
@@ -33,71 +27,71 @@ def EKF_Filter(x_prev, P_prev, y_obs, y_prev, Jx, K):
     P               = P_prev - P_prev @ tf.transpose(Jx) @ tf.transpose(K) 
     return x, P
 
-def ExtendedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None, muy=None):
-    """
-    Compute the estimated states using the Extended Kalman Filter given the measurements. 
+# def ExtendedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None, muy=None):
+#     """
+#     Compute the estimated states using the Extended Kalman Filter given the measurements. 
 
-    Keyword args:
-    -------------
-    y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-    model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided. 
-    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
-    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
-    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
-    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
-    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
-    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
-    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
+#     Keyword args:
+#     -------------
+#     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
+#     model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided. 
+#     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
+#     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+#     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+#     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+#     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+#     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
+#     muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
     
-    Returns:
-    --------
-    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the Extended Kalman Filter. 
-    """
-    nTimes, ndims   = y.shape     
+#     Returns:
+#     --------
+#     X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the Extended Kalman Filter. 
+#     """
+#     nTimes, ndims   = y.shape     
     
-    model           = "LG" if model is None else model
-    if model == "SV" and A is None : 
-        A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
-    if model == "SV" and A is not None :
-        if tf.reduce_max(A) > 1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-        if tf.reduce_min(A) < -1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-    if model != "SV" and A is None : 
-        A           = tf.eye(ndims, dtype=tf.float64)     
-    B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
-    V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
-    W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
+#     model           = "LG" if model is None else model
+#     if model == "SV" and A is None : 
+#         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
+#     if model == "SV" and A is not None :
+#         if tf.reduce_max(A) > 1.0:
+#             raise ValueError("The matrix A out of range [-1,1].")
+#         if tf.reduce_min(A) < -1.0:
+#             raise ValueError("The matrix A out of range [-1,1].")
+#     if model != "SV" and A is None : 
+#         A           = tf.eye(ndims, dtype=tf.float64)     
+#     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
+#     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
+#     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
     
 
-    mu0             = tf.zeros((ndims,), dtype=tf.float64)             
-    if model == "SV" and Sigma0 is None :
-        Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
-    if model != "SV" and Sigma0 is None: 
-        Sigma0      = V
+#     mu0             = tf.zeros((ndims,), dtype=tf.float64)             
+#     if model == "SV" and Sigma0 is None :
+#         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
+#     if model != "SV" and Sigma0 is None: 
+#         Sigma0      = V
         
-    muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
+#     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
 
-    u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
-    I1              = tf.ones((ndims,), dtype=tf.float64)
+#     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
+#     I1              = tf.ones((ndims,), dtype=tf.float64)
 
-    X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
+#     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
 
-    x_prev          = norm_rvs(ndims, mu0, Sigma0) 
-    P_prev          = A @ Sigma0 @ tf.transpose(A) + V
+#     x_prev          = norm_rvs(ndims, mu0, Sigma0) 
+#     P_prev          = A @ Sigma0 @ tf.transpose(A) + V
     
-    for i in range(nTimes):
-        x_pred, P_pred              = EKF_Predict(x_prev, P_prev, A, V)
+#     for i in range(nTimes):
+#         x_pred, P_pred              = EKF_Predict(x_prev, P_prev, A, V)
 
-        y_pred                      = measurements_pred(model, ndims, muy, B, x_pred, W, u)
-        Jx, Jw                      = measurements_Jacobi(model, I1, x_pred, y_pred, B)
+#         y_pred                      = measurements_pred(model, ndims, muy, B, x_pred, W, u)
+#         Jx, Jw                      = measurements_Jacobi(model, I1, x_pred, y_pred, B)
 
-        K                           = EKF_Gain(P_pred, Jx, Jw, W, u)
-        x_filt, P_filt              = EKF_Filter(x_pred, P_pred, y[i,:], y_pred, Jx, K)
-        x_prev, P_prev              = x_filt, P_filt        
-        X_filtered[i,:].assign(x_prev) 
+#         K                           = EKF_Gain(P_pred, Jx, Jw, W, u)
+#         x_filt, P_filt              = EKF_Filter(x_pred, P_pred, y[i,:], y_pred, Jx, K)
+#         x_prev, P_prev              = x_filt, P_filt        
+#         X_filtered[i,:].assign(x_prev) 
         
-    return X_filtered
+#     return X_filtered
 
 
 ###########################
@@ -181,86 +175,86 @@ def UKF_Filter(x1, P1, Wn, y_obs, y_pred, K):
     P               = P1 - K @ Wn @ tf.transpose(K)
     return x, P
 
-def UnscentedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
-    """
-    Compute the estimated states using the Unscented Kalman Filter given the measurements. 
+# def UnscentedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
+#     """
+#     Compute the estimated states using the Unscented Kalman Filter given the measurements. 
 
-    Keyword args:
-    -------------
-    y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-    model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
-    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
-    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
-    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
-    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
-    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
-    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
+#     Keyword args:
+#     -------------
+#     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
+#     model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
+#     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
+#     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+#     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+#     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+#     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+#     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
     
-    Returns:
-    --------
-    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the Unscented Kalman Filter. 
-    """
+#     Returns:
+#     --------
+#     X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the Unscented Kalman Filter. 
+#     """
 
-    nTimes, ndims   = y.shape 
+#     nTimes, ndims   = y.shape 
 
-    model           = "LG" if model is None else model
-    if model == "SV" and A is None : 
-        A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
-    if model == "SV" and A is not None :
-        if tf.reduce_max(A) > 1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-        if tf.reduce_min(A) < -1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-    if model != "SV" and A is None : 
-        A           = tf.eye(ndims, dtype=tf.float64) 
+#     model           = "LG" if model is None else model
+#     if model == "SV" and A is None : 
+#         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
+#     if model == "SV" and A is not None :
+#         if tf.reduce_max(A) > 1.0:
+#             raise ValueError("The matrix A out of range [-1,1].")
+#         if tf.reduce_min(A) < -1.0:
+#             raise ValueError("The matrix A out of range [-1,1].")
+#     if model != "SV" and A is None : 
+#         A           = tf.eye(ndims, dtype=tf.float64) 
     
-    B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
-    V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
-    W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
+#     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
+#     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
+#     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
 
-    mu0             = tf.zeros((ndims,), dtype=tf.float64)             
-    if model == "SV" and Sigma0 is None :
-        Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
-    if model != "SV" and Sigma0 is None: 
-        Sigma0      = V
+#     mu0             = tf.zeros((ndims,), dtype=tf.float64)             
+#     if model == "SV" and Sigma0 is None :
+#         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
+#     if model != "SV" and Sigma0 is None: 
+#         Sigma0      = V
     
-    u               = tf.eye(ndims, dtype=tf.float64) * 1e-9    
-    weight0_m, weight0_c, weighti, L = SigmaWeights(ndims) 
-    if model == "SV":
-        x_pred0     = tf.Variable(tf.zeros((ndims*2,), dtype=tf.float64))
-        P_pred0     = tf.Variable(tf.zeros((ndims*2,ndims*2), dtype=tf.float64))
-        P_pred0[ndims:ndims*2,ndims:ndims*2].assign(W) 
-    if model == "LG":
-        x_pred0     = tf.Variable(tf.zeros((ndims,), dtype=tf.float64))
-        P_pred0     = tf.Variable(tf.zeros((ndims,ndims), dtype=tf.float64))
+#     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9    
+#     weight0_m, weight0_c, weighti, L = SigmaWeights(ndims) 
+#     if model == "SV":
+#         x_pred0     = tf.Variable(tf.zeros((ndims*2,), dtype=tf.float64))
+#         P_pred0     = tf.Variable(tf.zeros((ndims*2,ndims*2), dtype=tf.float64))
+#         P_pred0[ndims:ndims*2,ndims:ndims*2].assign(W) 
+#     if model == "LG":
+#         x_pred0     = tf.Variable(tf.zeros((ndims,), dtype=tf.float64))
+#         P_pred0     = tf.Variable(tf.zeros((ndims,ndims), dtype=tf.float64))
     
-    X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
+#     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     
-    x_prev          = norm_rvs(ndims, mu0, Sigma0) 
-    P_prev          = A @ Sigma0 @ tf.transpose(A) + V
+#     x_prev          = norm_rvs(ndims, mu0, Sigma0) 
+#     P_prev          = A @ Sigma0 @ tf.transpose(A) + V
 
-    for i in range(nTimes):
+#     for i in range(nTimes):
 
-        Xprev_sp    = SigmaPoints(ndims, x_prev, P_prev, L)
-        X_sp        = Xprev_sp @ tf.transpose(A) 
-        x_pred      = UKF_Predict_mean(weight0_m, weighti, X_sp) 
-        P_pred      = UKF_Predict_cov(ndims, weight0_c, weighti, X_sp, x_pred, u, Cov=V)  
+#         Xprev_sp    = SigmaPoints(ndims, x_prev, P_prev, L)
+#         X_sp        = Xprev_sp @ tf.transpose(A) 
+#         x_pred      = UKF_Predict_mean(weight0_m, weighti, X_sp) 
+#         P_pred      = UKF_Predict_cov(ndims, weight0_c, weighti, X_sp, x_pred, u, Cov=V)  
 
-        if model == "SV":
-            x_pred0[:ndims].assign(x_pred)
-            P_pred0[:ndims,:ndims].assign(P_pred)
-        if model == "LG": 
-            x_pred0 = x_pred 
-            P_pred0 = P_pred 
+#         if model == "SV":
+#             x_pred0[:ndims].assign(x_pred)
+#             P_pred0[:ndims,:ndims].assign(P_pred)
+#         if model == "LG": 
+#             x_pred0 = x_pred 
+#             P_pred0 = P_pred 
 
-        y_pred, W_pred, C_pred = UKF_Predict(model, ndims, x_pred0, P_pred0, weight0_m, weight0_c, weighti, L, B, W, u)
-        K                      = UKF_Gain(C_pred, W_pred, u)
-        x_filt, P_filt         = UKF_Filter(x_pred, P_pred, W_pred, y[i,:], y_pred, K)
-        x_prev, P_prev         = x_filt, P_filt  
+#         y_pred, W_pred, C_pred = UKF_Predict(model, ndims, x_pred0, P_pred0, weight0_m, weight0_c, weighti, L, B, W, u)
+#         K                      = UKF_Gain(C_pred, W_pred, u)
+#         x_filt, P_filt         = UKF_Filter(x_pred, P_pred, W_pred, y[i,:], y_pred, K)
+#         x_prev, P_prev         = x_filt, P_filt  
 
-        X_filtered[i,:].assign(x_prev)         
+#         X_filtered[i,:].assign(x_prev)         
         
-    return X_filtered
+#     return X_filtered
 
 
 ################### 

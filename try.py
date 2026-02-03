@@ -2,8 +2,8 @@
 # Set directory #
 #################
 
-path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/" 
-pathdat             = "C:/Users/anastasia/MyProjects/JPMorgan/data/" 
+path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/"
+pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/data/"
 
 import os, sys
 os.chdir(path)

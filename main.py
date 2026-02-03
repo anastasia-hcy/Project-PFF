@@ -2,9 +2,8 @@
 # Set directory #
 #################
 
-path                = "C:/Users/anastasia/MyProjects/Codebase/ParticleFilteringJPM/"
-pathdat             = "C:/Users/anastasia/MyProjects/JPMorgan/data/"
-pathfig             = "C:/Users/anastasia/MyProjects/JPMorgan/Docs/"
+path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/"
+pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/data/"
 
 import os, sys
 os.chdir(path)
@@ -113,13 +112,41 @@ Cx_sparse       = data['sparse_Cx']
 #############################################
 
 from scripts import KalmanFilter, ExtendedKalmanFilter, UnscentedKalmanFilter
+
+KF = KalmanFilter(nTimes=nT, ndims=nD)
+EKF = ExtendedKalmanFilter(nTimes=nT, ndims=nD)
+UKF = UnscentedKalmanFilter(nTimes=nT, ndims=nD)
+
+X1_KF = KF.run(y=Y1)
+X1_EKF = EKF.run(y=Y1)
+X1_UKF = UKF.run(y=Y1)
+
+X_KF = KF.run(y=Y, model="SV", A=A, V=Cx)
+X_EKF = EKF.run(y=Y, model="SV", V=Cx)
+X_UKF = UKF.run(y=Y, model="SV", A=A, V=Cx)
+
+
+fig, ax = plt.subplots(1,2, figsize=(12,4))
+for i in range(nD):
+    ax[0].plot(X1[:,i], linewidth=1, alpha=0.5, color='green') 
+    ax[0].plot(X1_KF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='purple') 
+    ax[0].plot(X1_EKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
+    ax[0].plot(X1_UKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='blue') 
+for i in range(nD):
+    ax[1].plot(X[:,i], linewidth=1, alpha=0.5, color='green') 
+    ax[1].plot(X_EKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
+    ax[1].plot(X_UKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='blue') 
+plt.tight_layout()
+plt.show()
+
+
 from scripts import EDH, LEDH, KernelPFF, SDE
 from scripts import ParticleFilter, DifferentialParticleFilter
 
 start_cpu_time  = time.process_time()
 initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-X_KF            = KalmanFilter(Y1)
+X_KF            = KalmanFilter(y=Y1)
 
 # X1_EKF          = ExtendedKalmanFilter(Y1)
 # X_EKF           = ExtendedKalmanFilter(Y, V=Cx, model="SV")

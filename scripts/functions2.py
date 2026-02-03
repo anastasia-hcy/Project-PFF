@@ -7,7 +7,6 @@ tf.random.set_seed(123)
 
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve 
-from ot import sinkhorn
 from .model import initiate_particles, norm_rvs, measurements_pred
 
 ############################
