@@ -5,7 +5,7 @@ import tensorflow_probability as tfp
 tfd = tfp.distributions
 tf.random.set_seed(123)
 
-from .functions import initiate_particles, draw_particles, compute_weights, normalize_weights, compute_ESS, compute_posterior, ParticleFilter
+from .functions import initiate_particles, draw_particles, compute_weights, normalize_weights, compute_ESS, compute_posterior
 from .functions2 import soft_resample, cost_matrix
 import keras
 from keras import layers, ops
@@ -240,6 +240,7 @@ def DifferentialParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=
     w_multi         = tf.ones((N,), dtype=tf.float64) / N 
     _, _, _, _, parts2_train = ParticleFilter(y, N=N, model=model)
     _, _, weights_train, parts_train, _ = ParticleFilter(y, N=N, model=model, resample="Soft")
+    
     if backpropagation == "Simple": 
         Transform = SimpleFNN(SigmaX=tf.cast(Sigma0, dtype=tf.float32), ndim=ndims)
     elif backpropagation == "Multi-Head": 

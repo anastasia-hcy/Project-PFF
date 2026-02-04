@@ -27,77 +27,6 @@ def EKF_Filter(x_prev, P_prev, y_obs, y_prev, Jx, K):
     P               = P_prev - P_prev @ tf.transpose(Jx) @ tf.transpose(K) 
     return x, P
 
-# def ExtendedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None, muy=None):
-#     """
-#     Compute the estimated states using the Extended Kalman Filter given the measurements. 
-
-#     Keyword args:
-#     -------------
-#     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-#     model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided. 
-#     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
-#     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
-#     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
-#     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
-#     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
-#     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
-#     muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
-    
-#     Returns:
-#     --------
-#     X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the Extended Kalman Filter. 
-#     """
-#     nTimes, ndims   = y.shape     
-    
-#     model           = "LG" if model is None else model
-#     if model == "SV" and A is None : 
-#         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
-#     if model == "SV" and A is not None :
-#         if tf.reduce_max(A) > 1.0:
-#             raise ValueError("The matrix A out of range [-1,1].")
-#         if tf.reduce_min(A) < -1.0:
-#             raise ValueError("The matrix A out of range [-1,1].")
-#     if model != "SV" and A is None : 
-#         A           = tf.eye(ndims, dtype=tf.float64)     
-#     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
-#     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
-#     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
-    
-
-#     mu0             = tf.zeros((ndims,), dtype=tf.float64)             
-#     if model == "SV" and Sigma0 is None :
-#         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
-#     if model != "SV" and Sigma0 is None: 
-#         Sigma0      = V
-        
-#     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
-
-#     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
-#     I1              = tf.ones((ndims,), dtype=tf.float64)
-
-#     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
-
-#     x_prev          = norm_rvs(ndims, mu0, Sigma0) 
-#     P_prev          = A @ Sigma0 @ tf.transpose(A) + V
-    
-#     for i in range(nTimes):
-#         x_pred, P_pred              = EKF_Predict(x_prev, P_prev, A, V)
-
-#         y_pred                      = measurements_pred(model, ndims, muy, B, x_pred, W, u)
-#         Jx, Jw                      = measurements_Jacobi(model, I1, x_pred, y_pred, B)
-
-#         K                           = EKF_Gain(P_pred, Jx, Jw, W, u)
-#         x_filt, P_filt              = EKF_Filter(x_pred, P_pred, y[i,:], y_pred, Jx, K)
-#         x_prev, P_prev              = x_filt, P_filt        
-#         X_filtered[i,:].assign(x_prev) 
-        
-#     return X_filtered
-
-
-###########################
-# Unscented Kalman Filter # 
-###########################
-    
 def SigmaWeights(ndims, alpha=None, kappa=None, beta=None):
     """Compute and return the weights of sigma-points."""
     alpha           = 1.0 if alpha is None else alpha
@@ -175,87 +104,6 @@ def UKF_Filter(x1, P1, Wn, y_obs, y_pred, K):
     P               = P1 - K @ Wn @ tf.transpose(K)
     return x, P
 
-# def UnscentedKalmanFilter(y, model=None, A=None, B=None, V=None, W=None, mu0=None, Sigma0=None):
-#     """
-#     Compute the estimated states using the Unscented Kalman Filter given the measurements. 
-
-#     Keyword args:
-#     -------------
-#     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-#     model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
-#     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
-#     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
-#     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
-#     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
-#     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
-#     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
-    
-#     Returns:
-#     --------
-#     X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the Unscented Kalman Filter. 
-#     """
-
-#     nTimes, ndims   = y.shape 
-
-#     model           = "LG" if model is None else model
-#     if model == "SV" and A is None : 
-#         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
-#     if model == "SV" and A is not None :
-#         if tf.reduce_max(A) > 1.0:
-#             raise ValueError("The matrix A out of range [-1,1].")
-#         if tf.reduce_min(A) < -1.0:
-#             raise ValueError("The matrix A out of range [-1,1].")
-#     if model != "SV" and A is None : 
-#         A           = tf.eye(ndims, dtype=tf.float64) 
-    
-#     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
-#     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
-#     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
-
-#     mu0             = tf.zeros((ndims,), dtype=tf.float64)             
-#     if model == "SV" and Sigma0 is None :
-#         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
-#     if model != "SV" and Sigma0 is None: 
-#         Sigma0      = V
-    
-#     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9    
-#     weight0_m, weight0_c, weighti, L = SigmaWeights(ndims) 
-#     if model == "SV":
-#         x_pred0     = tf.Variable(tf.zeros((ndims*2,), dtype=tf.float64))
-#         P_pred0     = tf.Variable(tf.zeros((ndims*2,ndims*2), dtype=tf.float64))
-#         P_pred0[ndims:ndims*2,ndims:ndims*2].assign(W) 
-#     if model == "LG":
-#         x_pred0     = tf.Variable(tf.zeros((ndims,), dtype=tf.float64))
-#         P_pred0     = tf.Variable(tf.zeros((ndims,ndims), dtype=tf.float64))
-    
-#     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
-    
-#     x_prev          = norm_rvs(ndims, mu0, Sigma0) 
-#     P_prev          = A @ Sigma0 @ tf.transpose(A) + V
-
-#     for i in range(nTimes):
-
-#         Xprev_sp    = SigmaPoints(ndims, x_prev, P_prev, L)
-#         X_sp        = Xprev_sp @ tf.transpose(A) 
-#         x_pred      = UKF_Predict_mean(weight0_m, weighti, X_sp) 
-#         P_pred      = UKF_Predict_cov(ndims, weight0_c, weighti, X_sp, x_pred, u, Cov=V)  
-
-#         if model == "SV":
-#             x_pred0[:ndims].assign(x_pred)
-#             P_pred0[:ndims,:ndims].assign(P_pred)
-#         if model == "LG": 
-#             x_pred0 = x_pred 
-#             P_pred0 = P_pred 
-
-#         y_pred, W_pred, C_pred = UKF_Predict(model, ndims, x_pred0, P_pred0, weight0_m, weight0_c, weighti, L, B, W, u)
-#         K                      = UKF_Gain(C_pred, W_pred, u)
-#         x_filt, P_filt         = UKF_Filter(x_pred, P_pred, W_pred, y[i,:], y_pred, K)
-#         x_prev, P_prev         = x_filt, P_filt  
-
-#         X_filtered[i,:].assign(x_prev)         
-        
-#     return X_filtered
-
 
 ################### 
 # Particle Filter # 
@@ -314,108 +162,6 @@ def multinomial_resample(N, x, w):
 def compute_posterior(w, x):
     """Compute and return the posterior estimates of the state using the weights, w, and the particles, x."""
     return tf.linalg.matvec( tf.transpose(x), w ) 
-
-
-def ParticleFilter(y, model=None, A=None, B=None, V=None, W=None, N=None, resample=None, mu0=None, Sigma0=None, muy=None):
-    """
-    Compute the estimated states using the standard Particle Filter given the measurements. 
-
-    Keyword args:
-    -------------
-    y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-    model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.
-    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
-    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
-    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
-    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
-    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
-    N : int32, optional. Defaults to 1000 if not provided.
-    resample : Bool, optional. The multinomial resampling scheme. Defaults to true.  
-    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
-    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
-    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
-    
-    Returns:
-    --------
-    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the standard Particle Filter. 
-    ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes before resampling. 
-    Weights : tf.Variable of float64 with dimension (nTimes,N). The normalized weights of particles before resampling.
-    X_part : tf.Variable of float64 with dimension (nTimes,N,ndims). The particles before resampling.
-    X_part2 : tf.Variable of float64 with dimension (nTimes,N,ndims). THe particles after resampling.
-    """
-    
-    nTimes, ndims   = y.shape 
-    
-    model           = "LG" if model is None else model
-    
-    if model == "SV" and A is None : 
-        A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
-    if model == "SV" and A is not None :
-        if tf.reduce_max(A) > 1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-        if tf.reduce_min(A) < -1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-    if model != "SV" and A is None : 
-        A           = tf.eye(ndims, dtype=tf.float64) 
-    
-    B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
-    V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
-    W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
-    
-    mu0             = tf.zeros((ndims,), dtype=tf.float64)      
-    if model == "SV" and Sigma0 is None :
-        Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
-    if model != "SV" and Sigma0 is None: 
-        Sigma0      = V
-        
-    muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
-    resample        = "Multinomial" if resample is None else resample
-        
-    N               = 1000 if N is None else N
-    NT              = N/2
-    u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
-    I               = tf.ones((ndims,), dtype=tf.float64)
-    
-    X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
-    ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
-    Weights         = tf.Variable(tf.zeros((nTimes,N), dtype=tf.float64))
-    X_part          = tf.Variable(tf.zeros((nTimes,N,ndims), dtype=tf.float64))
-    X_part2         = tf.Variable(tf.zeros((nTimes,N,ndims), dtype=tf.float64))
-    
-    x_prev          = initiate_particles(N, ndims, mu0, Sigma0)
-    w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
-
-    for i in range(nTimes):
-        
-        x_pred, lp  = draw_particles(N, ndims, model, I, y[i,:], x_prev, V, muy, W, Sigma0, B, u)
-        w_pred      = compute_weights(w_prev, lp)
-        w_norm      = normalize_weights(w_pred) 
-        
-        X_part[i,:,:].assign(x_pred)
-        Weights[i,:].assign(w_norm)
-        
-        ness        = compute_ESS(w_norm)
-        ESS[i].assign(ness)
-        
-        if resample == "Multinomial" and ness < NT: 
-            xbar, wbar  = multinomial_resample(N, x_pred, w_norm)
-            
-        elif resample == "Soft" and ness < NT:
-            xbar, what  = soft_resample(N, x_pred, w_norm)
-            wbar        = normalize_weights(w_norm / what)
-            
-        elif ness >= NT:
-            xbar        = x_pred
-            wbar        = w_norm
-            
-        x_filt      = compute_posterior(wbar, xbar)
-        x_prev      = xbar        
-        w_prev      = wbar
-        X_part2[i,:,:].assign(x_prev)
-        X_filtered[i,:].assign(x_filt)
-
-    return X_filtered, ESS, Weights, X_part, X_part2 
-
 
 
 ##############################
@@ -481,156 +227,153 @@ def EDH_flow_lp(N, eta0, eta1, xprev, y, SigmaX, muy, SigmaY, U):
         Lp[i].assign( yLL + LogTarget(eta1[i,:], xprev[i,:], SigmaX) - LogImportance(eta0[i,:], xprev[i,:], SigmaX) )  
     return Lp
 
+# def EDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
+#     """
+#     Compute the estimated states using the EDH given the measurements. 
 
-
-def EDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
-    """
-    Compute the estimated states using the EDH given the measurements. 
-
-    Keyword args:
-    -------------
-    y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-    model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
-    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
-    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
-    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
-    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
-    N : int32, optional. Number of particles. Defaults to 1000 if not provided.
-    Nstep : int32, optional. Number of steps in the psuedo time interval [0,1]. Defaults to 30 if not provided.
-    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
-    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
-    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
-    method : str, optional. The linearization method. Defaults to "EKF" if not provided.  
-    stepsize : float64, optional. The first stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
+#     Keyword args:
+#     -------------
+#     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
+#     model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
+#     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix if not provided.
+#     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+#     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+#     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+#     N : int32, optional. Number of particles. Defaults to 1000 if not provided.
+#     Nstep : int32, optional. Number of steps in the psuedo time interval [0,1]. Defaults to 30 if not provided.
+#     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+#     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance if not provided.
+#     muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
+#     method : str, optional. The linearization method. Defaults to "EKF" if not provided.  
+#     stepsize : float64, optional. The first stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
     
-    Returns:
-    --------
-    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the EDH.
-    ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes before resampling. 
-    Weights : tf.Variable of float64 with dimension (nTimes,N). The weights of the particles before resampling. 
-    JacobiX : tf.Variable of float64 with dimension (nTimes,ndims,ndims). The pseudo Jacobian matrix with respect to the state. 
-    JacobiW : tf.Variable of float64 with dimension (nTimes,ndims,ndims). The pseudo Jacobian matrix with respect to the noise. 
-    """
+#     Returns:
+#     --------
+#     X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the EDH.
+#     ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes before resampling. 
+#     Weights : tf.Variable of float64 with dimension (nTimes,N). The weights of the particles before resampling. 
+#     JacobiX : tf.Variable of float64 with dimension (nTimes,ndims,ndims). The pseudo Jacobian matrix with respect to the state. 
+#     JacobiW : tf.Variable of float64 with dimension (nTimes,ndims,ndims). The pseudo Jacobian matrix with respect to the noise. 
+#     """
     
-    nTimes, ndims   = y.shape 
-    model           = "LG" if model is None else model
+#     nTimes, ndims   = y.shape 
+#     model           = "LG" if model is None else model
     
-    if model == "SV" and A is None : 
-        A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
-    if model == "SV" and A is not None :
-        if tf.reduce_max(A) > 1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-        if tf.reduce_min(A) < -1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-    if model != "SV" and A is None : 
-        A           = tf.eye(ndims, dtype=tf.float64) 
+#     if model == "SV" and A is None : 
+#         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
+#     if model == "SV" and A is not None :
+#         if tf.reduce_max(A) > 1.0:
+#             raise ValueError("The matrix A out of range [-1,1].")
+#         if tf.reduce_min(A) < -1.0:
+#             raise ValueError("The matrix A out of range [-1,1].")
+#     if model != "SV" and A is None : 
+#         A           = tf.eye(ndims, dtype=tf.float64) 
     
-    B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
-    V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
-    W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
+#     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
+#     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
+#     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
     
-    mu0             = tf.zeros((ndims,), dtype=tf.float64)       
-    if model == "SV" and Sigma0 is None :
-        Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
-    if model != "SV" and Sigma0 is None: 
-        Sigma0      = V
+#     mu0             = tf.zeros((ndims,), dtype=tf.float64)       
+#     if model == "SV" and Sigma0 is None :
+#         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
+#     if model != "SV" and Sigma0 is None: 
+#         Sigma0      = V
         
-    muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
+#     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
     
-    N               = 1000 if N is None else N
-    Np              = N
-    NT              = N/2
+#     N               = 1000 if N is None else N
+#     Np              = N
+#     NT              = N/2
     
-    weight0_m, weight0_c, weighti, L = SigmaWeights(ndims)
+#     weight0_m, weight0_c, weighti, L = SigmaWeights(ndims)
     
-    method          = "EKF" if method is None else method 
-    stepsize        = 1e-3 if stepsize is None else stepsize     
-    Nstep           = 30 if Nstep is None else Nstep
-    Steps           = tf.constant([stepsize * (1.2*i) for i in range(Nstep+1)], dtype=tf.float64)
-    Rates           = tf.math.cumsum(Steps) 
+#     method          = "EKF" if method is None else method 
+#     stepsize        = 1e-3 if stepsize is None else stepsize     
+#     Nstep           = 30 if Nstep is None else Nstep
+#     Steps           = tf.constant([stepsize * (1.2*i) for i in range(Nstep+1)], dtype=tf.float64)
+#     Rates           = tf.math.cumsum(Steps) 
     
-    u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
-    I               = tf.eye(ndims, dtype=tf.float64)
-    I1              = tf.ones((ndims,), dtype=tf.float64)
+#     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
+#     I               = tf.eye(ndims, dtype=tf.float64)
+#     I1              = tf.ones((ndims,), dtype=tf.float64)
 
-    X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
-    ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
-    Weights         = tf.Variable(tf.zeros((nTimes, Np), dtype=tf.float64))
+#     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
+#     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
+#     Weights         = tf.Variable(tf.zeros((nTimes, Np), dtype=tf.float64))
     
-    Jacobi_X        = tf.Variable(tf.zeros((nTimes,ndims,ndims), dtype=tf.float64))
-    Jacobi_W        = tf.Variable(tf.zeros((nTimes,ndims,ndims), dtype=tf.float64))
+#     Jacobi_X        = tf.Variable(tf.zeros((nTimes,ndims,ndims), dtype=tf.float64))
+#     Jacobi_W        = tf.Variable(tf.zeros((nTimes,ndims,ndims), dtype=tf.float64))
     
-    x_filt          = tf.Variable(mu0, dtype=tf.float64)
-    P_prev          = A @ Sigma0 @ tf.transpose(A) + V 
-    x_prev          = initiate_particles(Np, ndims, x_filt, P_prev)
-    w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
+#     x_filt          = tf.Variable(mu0, dtype=tf.float64)
+#     P_prev          = A @ Sigma0 @ tf.transpose(A) + V 
+#     x_prev          = initiate_particles(Np, ndims, x_filt, P_prev)
+#     w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
 
-    for i in range(nTimes): 
+#     for i in range(nTimes): 
 
-        if method == "UKF":        
-            eta, eta0, m_pred, P_pred   = EDH_linearize_UKF(Np, ndims, x_prev, x_filt, P_prev, A, V, weight0_m, weight0_c, weighti, L, u)
-            x_pred0                     = tf.Variable(tf.zeros((ndims*2,), dtype=tf.float64))
-            P_pred0                     = tf.Variable(tf.zeros((ndims*2,ndims*2), dtype=tf.float64))            
+#         if method == "UKF":        
+#             eta, eta0, m_pred, P_pred   = EDH_linearize_UKF(Np, ndims, x_prev, x_filt, P_prev, A, V, weight0_m, weight0_c, weighti, L, u)
+#             x_pred0                     = tf.Variable(tf.zeros((ndims*2,), dtype=tf.float64))
+#             P_pred0                     = tf.Variable(tf.zeros((ndims*2,ndims*2), dtype=tf.float64))            
             
-            if model == "SV" :
-                x_pred0[:ndims].assign(m_pred)
-                P_pred0[ndims:ndims*2,ndims:ndims*2].assign(W)     
-                P_pred0[0:ndims,0:ndims].assign(P_pred)
-            else: 
-                x_pred0                 = m_pred 
-                P_pred0                 = P_pred 
+#             if model == "SV" :
+#                 x_pred0[:ndims].assign(m_pred)
+#                 P_pred0[ndims:ndims*2,ndims:ndims*2].assign(W)     
+#                 P_pred0[0:ndims,0:ndims].assign(P_pred)
+#             else: 
+#                 x_pred0                 = m_pred 
+#                 P_pred0                 = P_pred 
             
-            y_pred, R, Rcross           = UKF_Predict(model, ndims, x_pred0, P_pred0, weight0_m, weight0_c, weighti, L, B, W, u)
-            H, Hw                       = measurements_Jacobi(model, I1, m_pred, y_pred, B)
+#             y_pred, R, Rcross           = UKF_Predict(model, ndims, x_pred0, P_pred0, weight0_m, weight0_c, weighti, L, B, W, u)
+#             H, Hw                       = measurements_Jacobi(model, I1, m_pred, y_pred, B)
 
-        if method == "EKF":            
-            eta, eta0, m_pred, P_pred   = EDH_linearize_EKF(Np, ndims, x_prev, x_filt, P_prev, A, V, u)
-            y_pred                      = measurements_pred(model, ndims, muy, B, m_pred, W, u) 
-            H, Hw                       = measurements_Jacobi(model, I1, m_pred, y_pred, B)
-            R                           = measurements_covyHat(model, Hw, W)
+#         if method == "EKF":            
+#             eta, eta0, m_pred, P_pred   = EDH_linearize_EKF(Np, ndims, x_prev, x_filt, P_prev, A, V, u)
+#             y_pred                      = measurements_pred(model, ndims, muy, B, m_pred, W, u) 
+#             H, Hw                       = measurements_Jacobi(model, I1, m_pred, y_pred, B)
+#             R                           = measurements_covyHat(model, Hw, W)
 
-        Jacobi_X[i,:,:].assign( H )
-        Jacobi_W[i,:,:].assign( Hw )
+#         Jacobi_X[i,:,:].assign( H )
+#         Jacobi_W[i,:,:].assign( Hw )
 
-        el                              = y_pred - tf.linalg.matvec(H, m_pred) 
-        eta1                            = eta0
-        for j in range(1,Nstep+1): 
-            eta1_move, eta_move         = EDH_flow_dynamics(Np, ndims, Rates[j], Steps[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
-            eta.assign_add(eta_move)
-            eta1.assign_add(eta1_move)
+#         el                              = y_pred - tf.linalg.matvec(H, m_pred) 
+#         eta1                            = eta0
+#         for j in range(1,Nstep+1): 
+#             eta1_move, eta_move         = EDH_flow_dynamics(Np, ndims, Rates[j], Steps[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)  
+#             eta.assign_add(eta_move)
+#             eta1.assign_add(eta1_move)
             
-        lp                              = EDH_flow_lp(Np, eta0, eta1, x_prev, y[i,:], P_pred, y_pred, R, u)     
-        w_pred                          = compute_weights(w_prev, lp)
-        w_norm                          = normalize_weights(w_pred)        
-        ness                            = compute_ESS(w_norm)
-        ESS[i].assign(ness)
-        Weights[i,:].assign(w_norm)   
+#         lp                              = EDH_flow_lp(Np, eta0, eta1, x_prev, y[i,:], P_pred, y_pred, R, u)     
+#         w_pred                          = compute_weights(w_prev, lp)
+#         w_norm                          = normalize_weights(w_pred)        
+#         ness                            = compute_ESS(w_norm)
+#         ESS[i].assign(ness)
+#         Weights[i,:].assign(w_norm)   
              
-        if ness < NT: 
-            xbar, wbar  = multinomial_resample(Np, eta1, w_norm)
-            x_filt      = compute_posterior(wbar, xbar)
-            x_prev      = xbar
-        else: 
-            x_filt      = compute_posterior(w_norm, eta1)
-            x_prev      = eta1
+#         if ness < NT: 
+#             xbar, wbar  = multinomial_resample(Np, eta1, w_norm)
+#             x_filt      = compute_posterior(wbar, xbar)
+#             x_prev      = xbar
+#         else: 
+#             x_filt      = compute_posterior(w_norm, eta1)
+#             x_prev      = eta1
         
-        X_filtered[i,:].assign(x_filt) 
+#         X_filtered[i,:].assign(x_filt) 
         
-        if method == "UKF":
-            K                           = UKF_Gain(Rcross, R, u)
-            _, P_filt                   = UKF_Filter(m_pred, P_pred, R, y[i,:], y_pred, K)
-        if method == "EKF":    
-            K                           = EKF_Gain(P_pred, H, Hw, W, u)
-            _, P_filt                   = EKF_Filter(m_pred, P_pred, y[i,:], y_pred, H, K)
-        P_prev      = P_filt
+#         if method == "UKF":
+#             K                           = UKF_Gain(Rcross, R, u)
+#             _, P_filt                   = UKF_Filter(m_pred, P_pred, R, y[i,:], y_pred, K)
+#         if method == "EKF":    
+#             K                           = EKF_Gain(P_pred, H, Hw, W, u)
+#             _, P_filt                   = EKF_Filter(m_pred, P_pred, y[i,:], y_pred, H, K)
+#         P_prev      = P_filt
         
-    return X_filtered, ESS, Weights, Jacobi_X, Jacobi_W
+#     return X_filtered, ESS, Weights, Jacobi_X, Jacobi_W
 
 
 ###############################
 # Particle Flow Filter - LEDH # 
 ###############################
-
 
 
 def LEDH_linearize_EKF(N, n, model, I1, xprev, Pprev, A, B, V, W, muy, U): 
@@ -666,7 +409,6 @@ def LEDH_linearize_EKF(N, n, model, I1, xprev, Pprev, A, B, V, W, muy, U):
         Cyi         = measurements_covyHat(model, Jwi, W)
         Cy[i,:,:].assign( Cyi )
         err[i,:].assign( yi_pred - tf.linalg.matvec(Jxi, eta[i,:]) )
-        
 
     return eta, eta0, m, P, y, H, Hw, Cy, err
 
@@ -760,156 +502,156 @@ def LEDH_flow_lp(N, eta0, theta, eta1, xprev, y, SigmaX, muy, SigmaY, U):
         Lp[i].assign( tf.math.log(theta[i]) + LogLikelihood(y, muy[i,:], SigmaY[i,:,:], U) + LogTarget(eta1[i,:], xprev[i,:], SigmaX[i,:,:]) - LogImportance(eta0[i,:], xprev[i,:], SigmaX[i,:,:]) )  
     return Lp
 
-def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None, stochastic=False, mc=None, Q=None):
-    """
-    Compute the estimated states using the LEDH given the measurements. 
+# def LEDH(y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None, stochastic=False, mc=None, Q=None):
+#     """
+#     Compute the estimated states using the LEDH given the measurements. 
 
-    Keyword args:
-    ------------- 
-    y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-    model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
-    A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
-    B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
-    V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
-    W : tf.Tensor of float64 with shape (ndims,ndims), optional. The measurement noise matrix. Defaults to identity matrix if not provided.
-    N : int32, optional. Number of particles. Defaults to 1000 if not provided.
-    Nstep : int32, optional. Number of steps in the psuedo time interval [0,1]. Defaults to 30 if not provided.
-    mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
-    Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
-    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
-    method : str, optional. The linearization method. Defaults to "EKF" if not provided.  
-    stepsize : float64, optional. The first stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
+#     Keyword args:
+#     ------------- 
+#     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
+#     model: string, optional. The name of the measurement model. Defaults to linear Gaussian "LG" if not provided.A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
+#     A : tf.Tensor of float64 with shape (ndims,ndims), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
+#     B : tf.Tensor of float64 with shape (ndims,ndims), optional. The output matrix. Defaults to identity matrix if not provided.
+#     V : tf.Tensor of float64 with shape (ndims,ndims), optional. The system noise matrix. Defaults to identity matrix if not provided.
+#     W : tf.Tensor of float64 with shape (ndims,ndims), optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+#     N : int32, optional. Number of particles. Defaults to 1000 if not provided.
+#     Nstep : int32, optional. Number of steps in the psuedo time interval [0,1]. Defaults to 30 if not provided.
+#     mu0 : tf.Tensor of float64 with shape (ndims,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+#     Sigma0 : tf.Tensor of float64 with shape (ndims,ndims). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
+#     muy : tf.Tensor of float64 with shape (ndims,), optioanl. The scalar means of the measurements. Defaults to zeros if not provided.
+#     method : str, optional. The linearization method. Defaults to "EKF" if not provided.  
+#     stepsize : float64, optional. The first stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
     
-    Returns:
-    --------
-    X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the LEDH. 
-    ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes. 
-    Weights : tf.Variable of float64 with dmension (nTimes,N). The weights of particles. 
-    JacobiX : tf.Variable of float64 with dimension (nTimes,N,ndims,ndims). The pseudo Jacobian matrix with respect to the state. 
-    JacobiW : tf.Variable of float64 with dimension (nTimes,N,ndims,ndims). The pseudo Jacobian matrix with respect to the noise. 
-    """
+#     Returns:
+#     --------
+#     X_filtered : tf.Variable of float64 with dimension (nTimes,ndims). The filtered states given by the LEDH. 
+#     ESS : tf.Variable of float64 with dimension (nTimes,). The effective sample sizes. 
+#     Weights : tf.Variable of float64 with dmension (nTimes,N). The weights of particles. 
+#     JacobiX : tf.Variable of float64 with dimension (nTimes,N,ndims,ndims). The pseudo Jacobian matrix with respect to the state. 
+#     JacobiW : tf.Variable of float64 with dimension (nTimes,N,ndims,ndims). The pseudo Jacobian matrix with respect to the noise. 
+#     """
     
-    nTimes, ndims   = y.shape 
-    model           = "LG" if model is None else model
+#     nTimes, ndims   = y.shape 
+#     model           = "LG" if model is None else model
     
-    if model == "SV" and A is None : 
-        A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
-    if model == "SV" and A is not None :
-        if tf.reduce_max(A) > 1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-        if tf.reduce_min(A) < -1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-    if model != "SV" and A is None : 
-        A           = tf.eye(ndims, dtype=tf.float64) 
+#     if model == "SV" and A is None : 
+#         A           = tf.eye(ndims, dtype=tf.float64) * 0.5  
+#     if model == "SV" and A is not None :
+#         if tf.reduce_max(A) > 1.0:
+#             raise ValueError("The matrix A out of range [-1,1].")
+#         if tf.reduce_min(A) < -1.0:
+#             raise ValueError("The matrix A out of range [-1,1].")
+#     if model != "SV" and A is None : 
+#         A           = tf.eye(ndims, dtype=tf.float64) 
     
-    B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
-    V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
-    W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
+#     B               = tf.eye(ndims, dtype=tf.float64) if B is None else B
+#     V               = tf.eye(ndims, dtype=tf.float64) if V is None else V 
+#     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
 
-    mu0             = tf.zeros((ndims,), dtype=tf.float64)      
-    if model == "SV" and Sigma0 is None :
-        Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
-    if model != "SV" and Sigma0 is None: 
-        Sigma0      = V
+#     mu0             = tf.zeros((ndims,), dtype=tf.float64)      
+#     if model == "SV" and Sigma0 is None :
+#         Sigma0      = V @ tf.linalg.inv(tf.eye(ndims, dtype=tf.float64) - A @ A)  
+#     if model != "SV" and Sigma0 is None: 
+#         Sigma0      = V
 
-    muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
-    u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
-    I               = tf.eye(ndims, dtype=tf.float64)
-    I1              = tf.ones((ndims,), dtype=tf.float64)
-    weight0_m, weight0_c, weighti, L = SigmaWeights(ndims)
+#     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
+#     u               = tf.eye(ndims, dtype=tf.float64) * 1e-9
+#     I               = tf.eye(ndims, dtype=tf.float64)
+#     I1              = tf.ones((ndims,), dtype=tf.float64)
+#     weight0_m, weight0_c, weighti, L = SigmaWeights(ndims)
 
-    N               = 100 if N is None else N
-    Np              = N
-    NT              = N/2
+#     N               = 100 if N is None else N
+#     Np              = N
+#     NT              = N/2
 
-    method          = "EKF" if method is None else method     
-    stepsize        = 1e-3 if stepsize is None else stepsize     
-    Nstep           = 30 if Nstep is None else Nstep
+#     method          = "EKF" if method is None else method     
+#     stepsize        = 1e-3 if stepsize is None else stepsize     
+#     Nstep           = 30 if Nstep is None else Nstep
 
-    if stochastic: 
-        Rates       = tf.constant(tf.linspace(0.0, 1.0, Nstep + 1).numpy(), dtype=tf.float64)
-        mc          = 0.1 if mc is None else mc
-        Q           = tf.eye(ndims, dtype=tf.float64) if Q is None else Q
-        q           = tf.linalg.cholesky(Q)
-        w0          = tf.zeros((ndims,), dtype=tf.float64)
-        I           = tf.eye(ndims, dtype=tf.float64)
-    else:
-        Steps       = tf.constant([stepsize * (1.2*i) for i in range(Nstep+1)], dtype=tf.float64)
-        Rates       = tf.math.cumsum(Steps) 
+#     if stochastic: 
+#         Rates       = tf.constant(tf.linspace(0.0, 1.0, Nstep + 1).numpy(), dtype=tf.float64)
+#         mc          = 0.1 if mc is None else mc
+#         Q           = tf.eye(ndims, dtype=tf.float64) if Q is None else Q
+#         q           = tf.linalg.cholesky(Q)
+#         w0          = tf.zeros((ndims,), dtype=tf.float64)
+#         I           = tf.eye(ndims, dtype=tf.float64)
+#     else:
+#         Steps       = tf.constant([stepsize * (1.2*i) for i in range(Nstep+1)], dtype=tf.float64)
+#         Rates       = tf.math.cumsum(Steps) 
 
-    JacobiX         = tf.Variable(tf.zeros((nTimes, Np, ndims, ndims), dtype=tf.float64))
-    JacobiW         = tf.Variable(tf.zeros((nTimes, Np, ndims, ndims), dtype=tf.float64))
-    Weights         = tf.Variable(tf.zeros((nTimes, Np), dtype=tf.float64))
-    ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
-    X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
+#     JacobiX         = tf.Variable(tf.zeros((nTimes, Np, ndims, ndims), dtype=tf.float64))
+#     JacobiW         = tf.Variable(tf.zeros((nTimes, Np, ndims, ndims), dtype=tf.float64))
+#     Weights         = tf.Variable(tf.zeros((nTimes, Np), dtype=tf.float64))
+#     ESS             = tf.Variable(tf.zeros((nTimes,), dtype=tf.float64))
+#     X_filtered      = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
 
-    P0              = A @ Sigma0 @ tf.transpose(A) + V
-    P_prev          = tf.Variable(tf.zeros((Np,ndims,ndims), dtype=tf.float64))
-    for i in range(Np):
-        P_prev[i,:,:].assign(P0)
+#     P0              = A @ Sigma0 @ tf.transpose(A) + V
+#     P_prev          = tf.Variable(tf.zeros((Np,ndims,ndims), dtype=tf.float64))
+#     for i in range(Np):
+#         P_prev[i,:,:].assign(P0)
 
-    x_filt          = mu0
-    x_prev          = initiate_particles(Np, ndims, mu0, P0)
-    w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
+#     x_filt          = mu0
+#     x_prev          = initiate_particles(Np, ndims, mu0, P0)
+#     w_prev          = tf.Variable(tf.ones((N,), dtype=tf.float64) / N) 
 
-    for i in range(nTimes): 
+#     for i in range(nTimes): 
 
-        if method == "UKF":        
-            eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, Rcross, el = LEDH_linearize_UKF(Np, ndims, model, I1, x_prev, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, u)
-        if method == "EKF":            
-            eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el = LEDH_linearize_EKF(Np, ndims, model, I1, x_prev, P_prev, A, B, V, W, muy, u)
+#         if method == "UKF":        
+#             eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, Rcross, el = LEDH_linearize_UKF(Np, ndims, model, I1, x_prev, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, u)
+#         if method == "EKF":            
+#             eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el = LEDH_linearize_EKF(Np, ndims, model, I1, x_prev, P_prev, A, B, V, W, muy, u)
         
-        JacobiX[i,:,:,:].assign(H)
-        JacobiW[i,:,:,:].assign(Hiw)
+#         JacobiX[i,:,:,:].assign(H)
+#         JacobiW[i,:,:,:].assign(Hiw)
         
-        if stochastic: 
-            HessiansPrios, HessiansLike, JacobiLike = LEDH_SDE_Hessians(Np, P_pred, y[i,:], y_pred, R, u)
+#         if stochastic: 
+#             HessiansPrios, HessiansLike, JacobiLike = LEDH_SDE_Hessians(Np, P_pred, y[i,:], y_pred, R, u)
         
-        eta1        = eta0
-        theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
-        for j in range(1,Nstep+1): 
+#         eta1        = eta0
+#         theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
+#         for j in range(1,Nstep+1): 
 
-            if stochastic: 
-                dL  = Rates[j] - Rates[j-1]
-                eta1_move, theta_prod = LEDH_SDE_flow_dynamics(Np, ndims, eta0, eta1, P_pred, y_pred, R, Rates[j], dL, HessiansPrios, HessiansLike, JacobiLike, mc, w0, I, Q, q, u)
-                theta2 = theta * theta_prod
-                eta1.assign_add(eta1_move)
-                theta.assign(theta2)
-            else:
-                eta1_move, eta_move, theta_prod = LEDH_flow_dynamics(Np, ndims, Rates[j], Steps[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)                   
-                theta2 = theta * theta_prod
-                eta.assign_add(eta_move)
-                eta1.assign_add(eta1_move)
-                theta.assign(theta2)
+#             if stochastic: 
+#                 dL  = Rates[j] - Rates[j-1]
+#                 eta1_move, theta_prod = LEDH_SDE_flow_dynamics(Np, ndims, eta0, eta1, P_pred, y_pred, R, Rates[j], dL, HessiansPrios, HessiansLike, JacobiLike, mc, w0, I, Q, q, u)
+#                 theta2 = theta * theta_prod
+#                 eta1.assign_add(eta1_move)
+#                 theta.assign(theta2)
+#             else:
+#                 eta1_move, eta_move, theta_prod = LEDH_flow_dynamics(Np, ndims, Rates[j], Steps[j], I, eta, eta1, P_pred, H, R, el, y[i,:], u)                   
+#                 theta2 = theta * theta_prod
+#                 eta.assign_add(eta_move)
+#                 eta1.assign_add(eta1_move)
+#                 theta.assign(theta2)
             
-        lp          = LEDH_flow_lp(Np, eta0, theta, eta1, x_prev, y[i,:], P_pred, y_pred, R, u)       
-        w_pred      = compute_weights(w_prev, lp)
-        w_norm      = normalize_weights(w_pred)        
-        ness        = compute_ESS(w_norm)
+#         lp          = LEDH_flow_lp(Np, eta0, theta, eta1, x_prev, y[i,:], P_pred, y_pred, R, u)       
+#         w_pred      = compute_weights(w_prev, lp)
+#         w_norm      = normalize_weights(w_pred)        
+#         ness        = compute_ESS(w_norm)
 
-        ESS[i].assign(ness)
-        Weights[i,:].assign(w_norm)   
+#         ESS[i].assign(ness)
+#         Weights[i,:].assign(w_norm)   
              
-        if ness < NT: 
-            xbar, wbar  = multinomial_resample(Np, eta1, w_norm)
-            x_filt      = compute_posterior(wbar, xbar)
-            x_prev      = xbar
-            w_prev      = wbar
-        else: 
-            x_filt      = compute_posterior(w_norm, eta1)
-            x_prev      = eta1
-            w_prev      = w_norm
+#         if ness < NT: 
+#             xbar, wbar  = multinomial_resample(Np, eta1, w_norm)
+#             x_filt      = compute_posterior(wbar, xbar)
+#             x_prev      = xbar
+#             w_prev      = wbar
+#         else: 
+#             x_filt      = compute_posterior(w_norm, eta1)
+#             x_prev      = eta1
+#             w_prev      = w_norm
 
-        X_filtered[i,:].assign(x_filt) 
+#         X_filtered[i,:].assign(x_filt) 
         
-        if method == "UKF":
-            P_filt  = LEDH_update_UKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, R, Rcross, u) 
-        if method == "EKF":    
-            P_filt  = LEDH_update_EKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, H, Hiw, W, u)
+#         if method == "UKF":
+#             P_filt  = LEDH_update_UKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, R, Rcross, u) 
+#         if method == "EKF":    
+#             P_filt  = LEDH_update_EKF(Np, ndims, m_pred, P_pred, y[i,:], y_pred, H, Hiw, W, u)
         
-        P_prev          = P_filt
+#         P_prev          = P_filt
         
-    return X_filtered, ESS, Weights, JacobiX, JacobiW
+#     return X_filtered, ESS, Weights, JacobiX, JacobiW
 
 
 #####################################
@@ -960,106 +702,106 @@ def KPFF_flow(N, n, epsilon, integral, Sigma0):
     return xadd 
 
 
-def KernelPFF(y, Nx, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
-    """
-    Compute the estimated states using the Kernel PFF given the measurements. 
+# def KernelPFF(y, Nx, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, Sigma0=None, muy=None, method=None, stepsize=None):
+#     """
+#     Compute the estimated states using the Kernel PFF given the measurements. 
 
-    Keyword args:
-    -------------
-    y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
-    Nx : int32. The dimension of the state. 
-    A : tf.Tensor of float64 with shape (Nx,Nx), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
-    B : tf.Tensor of float64 with shape (ndims,Nx), optional. The output matrix. Defaults to identity matrix if not provided.
-    V : tf.Tensor of float64 with shape (Nx,Nx), optional. The system noise matrix. Defaults to identity matrix if not provided.
-    W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
-    N : int32, optional. Number of particles. Defaults to 1000 if not provided.
-    Nstep : int32, optional. Number of steps in the psuedo time interval [0,1]. Defaults to 30 if not provided.
-    mu0 : tf.Tensor of float64 with shape (Nx,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
-    Sigma0 : tf.Tensor of float64 with shape (Nx,Nx). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
-    muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
-    method : str, optional. The linearization method. Defaults to "kernel" if not provided.
-    stepsize : float64, optional. The stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
+#     Keyword args:
+#     -------------
+#     y : tf.Variable of float64 with dimension (nTimes,ndims). The observed measurements. 
+#     Nx : int32. The dimension of the state. 
+#     A : tf.Tensor of float64 with shape (Nx,Nx), optional. The transition matrix. Defaults to diagonal matrix of 0.5 if not provided.
+#     B : tf.Tensor of float64 with shape (ndims,Nx), optional. The output matrix. Defaults to identity matrix if not provided.
+#     V : tf.Tensor of float64 with shape (Nx,Nx), optional. The system noise matrix. Defaults to identity matrix if not provided.
+#     W : tf.Tensor of float64 with shape (ndims,ndims)., optional. The measurement noise matrix. Defaults to identity matrix if not provided.
+#     N : int32, optional. Number of particles. Defaults to 1000 if not provided.
+#     Nstep : int32, optional. Number of steps in the psuedo time interval [0,1]. Defaults to 30 if not provided.
+#     mu0 : tf.Tensor of float64 with shape (Nx,), optioanl. The prior mean for initial state. Defaults to zeros if not provided.
+#     Sigma0 : tf.Tensor of float64 with shape (Nx,Nx). The prior covariance for initial state. Defaults to predefined covariance using V and A if not provided.
+#     muy : tf.Tensor of float64 with shape (ndims,), optioanl. The expectation of the measurements. Defaults to zeros if not provided.
+#     method : str, optional. The linearization method. Defaults to "kernel" if not provided.
+#     stepsize : float64, optional. The stepsize in the psuedo time interval [0,1]. Defaults to 1e-3 if not provided. 
     
-    Returns:
-    --------
-    X_filtered : tf.Variable of float64 with dimension (nTimes,Nx). The filtered states given by the Kernel PFF.
-    JacobiX : tf.Variable of float64 with dimension (nTimes,Nstep,N,ndims,Nx). The pseudo Jacobian matrix with respect to the state. 
-    JacobiW : tf.Variable of float64 with dimension (nTimes,Nstep,N,ndims,ndims). The pseudo Jacobian matrix with respect to the noise. 
-    X_part : tf.Variable of float64 with dimension (nTimes,N,Nx). The prior particles given by the Kernel PFF.
-    X_part2 : tf.Variable of float64 with dimension (nTimes,N,Nx). The posterior particles given by the Kernel PFF.
-    """
+#     Returns:
+#     --------
+#     X_filtered : tf.Variable of float64 with dimension (nTimes,Nx). The filtered states given by the Kernel PFF.
+#     JacobiX : tf.Variable of float64 with dimension (nTimes,Nstep,N,ndims,Nx). The pseudo Jacobian matrix with respect to the state. 
+#     JacobiW : tf.Variable of float64 with dimension (nTimes,Nstep,N,ndims,ndims). The pseudo Jacobian matrix with respect to the noise. 
+#     X_part : tf.Variable of float64 with dimension (nTimes,N,Nx). The prior particles given by the Kernel PFF.
+#     X_part2 : tf.Variable of float64 with dimension (nTimes,N,Nx). The posterior particles given by the Kernel PFF.
+#     """
     
-    nTimes, ndims   = y.shape 
-    model           = "LG" if model is None else model
+#     nTimes, ndims   = y.shape 
+#     model           = "LG" if model is None else model
     
-    if model == "SV" and A is None : 
-        A           = tf.eye(Nx, dtype=tf.float64) * 0.5 if A is None else A
-    if model == "SV" and A is not None :
-        if tf.reduce_max(A) > 1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-        if tf.reduce_min(A) < -1.0:
-            raise ValueError("The matrix A out of range [-1,1].")
-    if model != "SV" and A is None : 
-        A           = tf.eye(Nx, dtype=tf.float64) 
+#     if model == "SV" and A is None : 
+#         A           = tf.eye(Nx, dtype=tf.float64) * 0.5 if A is None else A
+#     if model == "SV" and A is not None :
+#         if tf.reduce_max(A) > 1.0:
+#             raise ValueError("The matrix A out of range [-1,1].")
+#         if tf.reduce_min(A) < -1.0:
+#             raise ValueError("The matrix A out of range [-1,1].")
+#     if model != "SV" and A is None : 
+#         A           = tf.eye(Nx, dtype=tf.float64) 
 
-    if ndims != Nx and B is None:
-        B           = tf.ones((ndims, Nx), dtype=tf.float64)
-    if ndims == Nx and B is None: 
-        B           = tf.eye(ndims, dtype=tf.float64) 
+#     if ndims != Nx and B is None:
+#         B           = tf.ones((ndims, Nx), dtype=tf.float64)
+#     if ndims == Nx and B is None: 
+#         B           = tf.eye(ndims, dtype=tf.float64) 
 
-    V               = tf.eye(Nx, dtype=tf.float64) if V is None else V 
-    W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
+#     V               = tf.eye(Nx, dtype=tf.float64) if V is None else V 
+#     W               = tf.eye(ndims, dtype=tf.float64) if W is None else W
 
-    mu0             = tf.zeros((Nx,), dtype=tf.float64) if mu0 is None else mu0
-    if model == "SV" and Sigma0 is None :
-        Sigma0      = V @ tf.linalg.inv(tf.eye(Nx, dtype=tf.float64) - A @ A)  
-    if model != "SV" and Sigma0 is None : 
-        Sigma0      = V  
-    muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
+#     mu0             = tf.zeros((Nx,), dtype=tf.float64) if mu0 is None else mu0
+#     if model == "SV" and Sigma0 is None :
+#         Sigma0      = V @ tf.linalg.inv(tf.eye(Nx, dtype=tf.float64) - A @ A)  
+#     if model != "SV" and Sigma0 is None : 
+#         Sigma0      = V  
+#     muy             = tf.zeros((ndims,), dtype=tf.float64) if muy is None else muy
 
-    N               = 1000 if N is None else N
-    Np              = N
+#     N               = 1000 if N is None else N
+#     Np              = N
     
-    method          = "kernel" if method is None else method 
-    stepsize        = 1e-3 if stepsize is None else stepsize     
-    Nstep           = 30 if Nstep is None else Nstep
-    Rates           = [stepsize] + [stepsize * (1.2*i) for i in range(1,Nstep)]
+#     method          = "kernel" if method is None else method 
+#     stepsize        = 1e-3 if stepsize is None else stepsize     
+#     Nstep           = 30 if Nstep is None else Nstep
+#     Rates           = [stepsize] + [stepsize * (1.2*i) for i in range(1,Nstep)]
     
-    u               = tf.eye(Nx, dtype=tf.float64) * 1e-9
-    uy              = tf.eye(ndims, dtype=tf.float64) * 1e-9
-    I1              = tf.ones((ndims,), dtype=tf.float64)
+#     u               = tf.eye(Nx, dtype=tf.float64) * 1e-9
+#     uy              = tf.eye(ndims, dtype=tf.float64) * 1e-9
+#     I1              = tf.ones((ndims,), dtype=tf.float64)
 
-    x_hat           = mu0
+#     x_hat           = mu0
     
-    X_filtered      = tf.Variable(tf.zeros((nTimes, Nx), dtype=tf.float64))   
-    X_part          = tf.Variable(tf.zeros((nTimes, N, Nx), dtype=tf.float64))
-    X_part2         = tf.Variable(tf.zeros((nTimes, N, Nx), dtype=tf.float64))
-    JacobiX         = tf.Variable(tf.zeros((nTimes, Nstep, Np, ndims, Nx), dtype=tf.float64))  
-    JacobiW         = tf.Variable(tf.zeros((nTimes, Nstep, Np, ndims, ndims), dtype=tf.float64))  
+#     X_filtered      = tf.Variable(tf.zeros((nTimes, Nx), dtype=tf.float64))   
+#     X_part          = tf.Variable(tf.zeros((nTimes, N, Nx), dtype=tf.float64))
+#     X_part2         = tf.Variable(tf.zeros((nTimes, N, Nx), dtype=tf.float64))
+#     JacobiX         = tf.Variable(tf.zeros((nTimes, Nstep, Np, ndims, Nx), dtype=tf.float64))  
+#     JacobiW         = tf.Variable(tf.zeros((nTimes, Nstep, Np, ndims, ndims), dtype=tf.float64))  
     
-    for i in range(nTimes): 
+#     for i in range(nTimes): 
     
-        x_prev      = initiate_particles(Np, Nx, x_hat, Sigma0)
-        X_part[i,:,:].assign(x_prev)
+#         x_prev      = initiate_particles(Np, Nx, x_hat, Sigma0)
+#         X_part[i,:,:].assign(x_prev)
 
-        for j in range(Nstep): 
+#         for j in range(Nstep): 
             
-            grad, Jx, Jw = KPFF_LP(Np, Nx, ndims, model, I1, x_prev, y[i,:], muy, B, W, x_hat, Sigma0, u, uy)
+#             grad, Jx, Jw = KPFF_LP(Np, Nx, ndims, model, I1, x_prev, y[i,:], muy, B, W, x_hat, Sigma0, u, uy)
             
-            if method == "kernel":
-                II  = KPFF_RKHS(Np, Nx, x_prev, grad, Sigma0)
-            if method == "scalar":
-                II  = grad / Np
+#             if method == "kernel":
+#                 II  = KPFF_RKHS(Np, Nx, x_prev, grad, Sigma0)
+#             if method == "scalar":
+#                 II  = grad / Np
 
-            x_move  = KPFF_flow(Np, Nx, Rates[j], II, Sigma0)
-            x_prev.assign_add(x_move) 
+#             x_move  = KPFF_flow(Np, Nx, Rates[j], II, Sigma0)
+#             x_prev.assign_add(x_move) 
             
-            JacobiX[i,j,:,:,:].assign(Jx)
-            JacobiW[i,j,:,:,:].assign(Jw)
+#             JacobiX[i,j,:,:,:].assign(Jx)
+#             JacobiW[i,j,:,:,:].assign(Jw)
 
-        x_hat       = tf.Variable( tf.reduce_mean(x_prev, axis=0) )   
+#         x_hat       = tf.Variable( tf.reduce_mean(x_prev, axis=0) )   
 
-        X_part2[i,:,:].assign(x_prev)         
-        X_filtered[i,:].assign(x_hat)
+#         X_part2[i,:,:].assign(x_prev)         
+#         X_filtered[i,:].assign(x_hat)
 
-    return X_filtered, JacobiX, JacobiW, X_part, X_part2
+#     return X_filtered, JacobiX, JacobiW, X_part, X_part2

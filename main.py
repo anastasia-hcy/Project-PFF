@@ -2,8 +2,8 @@
 # Set directory #
 #################
 
-path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/"
-pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/data/"
+path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PPF/"
+pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PPF/data/"
 
 import os, sys
 os.chdir(path)
@@ -106,25 +106,49 @@ A_sparse        = data['sparse_A']
 B_sparse        = data['sparse_B']
 Cx_sparse       = data['sparse_Cx']
 
-
 ############################################# 
 # Reproduce results using simulated dataset #
 #############################################
 
-from scripts import KalmanFilter, ExtendedKalmanFilter, UnscentedKalmanFilter
+def cumulative_mse(nTimes, ndims, xhat, x):
+    counts = np.arange(1,nTimes+1,1)
+    MSE = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
+    for i in range(ndims):
+        mseSum = np.cumsum(np.mean(np.square(xhat[:,i] - x[:,i]), axis=-1))
+        MSE[:,i].assign(mseSum / counts)    
+    return MSE 
+
+from scripts import KalmanFilter, ExtendedKalmanFilter, UnscentedKalmanFilter, StandardParticleFilter
+from scripts import ExactDH, LocalExactDH, KernelParticleFlow
 
 KF = KalmanFilter(nTimes=nT, ndims=nD)
 EKF = ExtendedKalmanFilter(nTimes=nT, ndims=nD)
 UKF = UnscentedKalmanFilter(nTimes=nT, ndims=nD)
+PF = StandardParticleFilter(nTimes=nT, ndims=nD)
+EDH = ExactDH(nTimes=nT, ndims=nD)
+LEDH = LocalExactDH(nTimes=nT, ndims=nD)
+KernelPFF = KernelParticleFlow(nTimes=nT, ndims=nD, nx=nX)
+
 
 X1_KF = KF.run(y=Y1)
 X1_EKF = EKF.run(y=Y1)
 X1_UKF = UKF.run(y=Y1)
+X1_PF, ess1_PF, weights1_PF, particles1_PF, particles2_1_PF = PF.run(y=Y1, N=Np)
+
+X1_EDH_EKF, ess1_EDH_EKF, weights1_EDH_EKF, Jx_EDH_EKF_1, Jw1_EDH_EKF = EDH.run(y=Y1, N=Np)
+X1_EDH, ess1_EDH, weights1_EDH, Jx1_EDH, Jw1_EDH = EDH.run(y=Y1, N=Np, method='UKF')
+X1_LEDH_EKF, ess1_LEDH_EKF, weights1_LEDH_EKF, Jx1_LEDH_EKF, Jw1_LEDH_EKF = LEDH.run(y=Y1, N=Np)
+X1_LEDH, ess1_LEDH, weights1_LEDH, Jx1_LEDH, Jw1_LEDH = LEDH.run(y=Y1, N=Np, method='UKF')    
 
 X_KF = KF.run(y=Y, model="SV", A=A, V=Cx)
 X_EKF = EKF.run(y=Y, model="SV", V=Cx)
 X_UKF = UKF.run(y=Y, model="SV", A=A, V=Cx)
+X_PF, ess_PF, weights_PF, particles_PF, particles2_PF = PF.run(y=Y, model="SV", V=Cx, N=Np)
 
+X_EDH_EKF, ess_EDH_EKF, weights_EDH_EKF, Jx_EDH_EKF, Jw_EDH_EKF = EDH.run(y=Y, model="SV", V=Cx, N=Np)
+X_EDH, ess_EDH, weights_EDH, Jx_EDH, Jw_EDH = EDH.run(y=Y, model="SV", V=Cx, N=Np, method='UKF')
+X_LEDH_EKF, ess_LEDH_EKF, weights_LEDH_EKF, Jx_LEDH_EKF, Jw_LEDH_EKF = LEDH.run(y=Y, model="SV", V=Cx, N=Np)
+X_LEDH, ess_LEDH, weights_LEDH, Jx_LEDH, Jw_LEDH = LEDH.run(y=Y, model="SV", V=Cx, N=Np, method='UKF')
 
 fig, ax = plt.subplots(1,2, figsize=(12,4))
 for i in range(nD):
@@ -132,16 +156,16 @@ for i in range(nD):
     ax[0].plot(X1_KF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='purple') 
     ax[0].plot(X1_EKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
     ax[0].plot(X1_UKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='blue') 
+    ax[0].plot(X1_PF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
 for i in range(nD):
     ax[1].plot(X[:,i], linewidth=1, alpha=0.5, color='green') 
+    # ax[1].plot(X_KF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='purple') 
     ax[1].plot(X_EKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
     ax[1].plot(X_UKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='blue') 
+    ax[1].plot(X_PF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
 plt.tight_layout()
 plt.show()
 
-
-from scripts import EDH, LEDH, KernelPFF, SDE
-from scripts import ParticleFilter, DifferentialParticleFilter
 
 start_cpu_time  = time.process_time()
 initial_rss     = psutil.Process(os.getpid()).memory_info().rss
@@ -427,11 +451,6 @@ X_DPF_MH_1, ess_DPF_MH_1, weights_DPF_MH_1, particles_DPF_MH_1, particles2_DPF_M
 """
 Plots of results
 """
-
-def cumulative_mse(nTimes, xhat, x):
-    mseSum = np.cumsum(np.mean(np.square(xhat - x), axis=-1))
-    counts = np.arange(1,nTimes+1,1)
-    return mseSum / counts
 
 mse_ekf =  cumulative_mse(nT, X_EKF, X)
 mse_ekf_1 =  cumulative_mse(nT, X1_EKF, X1)

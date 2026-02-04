@@ -256,7 +256,7 @@ class TestKF(unittest.TestCase):
         self.V          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64)) 
         self.W          = tf.linalg.diag(tf.random.uniform((self.nD,), 1e-3, 2.0, dtype=tf.float64))
 
-        self.KF         = KalmanFilter(nTimes=self.nT, ndims=self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
+        self.KF         = KalmanFilter(nTimes=self.nT, ndims=self.nD)
 
     def test_kf_predict(self):
 
@@ -333,9 +333,11 @@ class TestEKF(unittest.TestCase):
         self.m          = tf.zeros(self.nD, dtype=tf.float64)
         self.u          = tf.eye(self.nD, dtype=tf.float64) * 1e-9
 
+        self.EKF        = ExtendedKalmanFilter(nTimes=self.nT, ndims=self.nD)
+
     def test_ekf_predict(self):
 
-        x, P            = EKF_Predict(self.Xprev, self.P, self.A, self.V)
+        x, P            = self.EKF.Predict(self.Xprev, self.P, self.A, self.V)
         expected_x      = tf.linalg.matvec(self.A, self.Xprev)
         expected_P      = self.A @ self.P @ tf.transpose(self.A) + self.V
 
@@ -353,7 +355,7 @@ class TestEKF(unittest.TestCase):
         ypred           = tf.constant(tf.range(self.nD, dtype=tf.float64))
         gx              = SV_transform(self.B, self.Xprev)
         Jx, Jw          = SV_Jacobi(gx, ypred)
-        K               = EKF_Gain(self.P, Jx, Jw, self.W, self.u)
+        K               = self.EKF.Gain(self.P, Jx, Jw, self.W, self.u)
         
         Mx              = self.P @ tf.transpose(Jx)
         J               = Jx @ Mx + Jw @ self.W @ tf.transpose(Jw)
@@ -368,8 +370,8 @@ class TestEKF(unittest.TestCase):
         y_pred          = tf.constant(tf.range(self.nD, dtype=tf.float64))
         gx              = SV_transform(self.B, self.Xprev)
         Jx, Jw          = SV_Jacobi(gx, y_pred)
-        K               = EKF_Gain(self.P, Jx, Jw, self.W, self.u)
-        x, P            = EKF_Filter(self.Xprev, self.P, self.Y, y_pred, Jx, K)
+        K               = self.EKF.Gain(self.P, Jx, Jw, self.W, self.u)
+        x, P            = self.EKF.Filter(self.Xprev, self.P, self.Y, y_pred, Jx, K)
 
         expected_x      = self.Xprev + tf.linalg.matvec(K, self.Y - y_pred)
         expected_P      = self.P - self.P @ tf.transpose(Jx) @ tf.transpose(K)
@@ -383,17 +385,17 @@ class TestEKF(unittest.TestCase):
     def test_extended_kalman_filter(self):
 
         _, Y            = SSM(self.nT, self.nD, A=self.A, B=self.B, V=self.V, W=self.W)
-        X_filtered      = ExtendedKalmanFilter(y=Y, A=self.A, B=self.B, V=self.V, W=self.W)
+        X_filtered      = self.EKF.run(y=Y, A=self.A, B=self.B, V=self.V, W=self.W)
 
         self.assertEqual(X_filtered.shape, (self.nT, self.nD))
-        self.assertTrue(isinstance(X_filtered, tf.Variable))
+        self.assertTrue(isinstance(X_filtered, tf.Tensor))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered)))
 
         _, Y2           = SSM(self.nT, self.nD, model="SV", A=self.A, B=self.B, V=self.V, W=self.W)
-        X_filtered2     = ExtendedKalmanFilter(y=Y2, A=self.A, B=self.B, V=self.V, W=self.W)
+        X_filtered2     = self.EKF.run(y=Y2, model="SV", A=self.A, B=self.B, V=self.V, W=self.W)
 
         self.assertEqual(X_filtered2.shape, (self.nT, self.nD))
-        self.assertTrue(isinstance(X_filtered2, tf.Variable))
+        self.assertTrue(isinstance(X_filtered2, tf.Tensor))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered2)))
 
 
@@ -424,9 +426,11 @@ class TestUKF(unittest.TestCase):
         self.beta       = 2.0
         self.Lambda     = (self.alpha ** 2) * self.kappa
 
+        self.UKF        = UnscentedKalmanFilter(nTimes=self.nT, ndims=self.nD, alpha=self.alpha, kappa=self.kappa, beta=self.beta)
+
     def test_sigma_weights(self):
 
-        wm, wc, wi, L   = SigmaWeights(self.nD, self.alpha, self.kappa, self.beta)
+        wm, wc, wi, L   = self.UKF.SigmaWeights(self.nD, self.alpha, self.kappa, self.beta)
 
         expected_Lambda = (self.alpha ** 2) * self.kappa
         expected_wm     = (expected_Lambda - self.nD) / expected_Lambda
@@ -440,7 +444,7 @@ class TestUKF(unittest.TestCase):
 
     def test_sigma_points(self):
 
-        SP              = SigmaPoints(self.nD, self.Xprev, self.P, self.Lambda)
+        SP              = self.UKF.SigmaPoints(self.nD, self.Xprev, self.P, self.Lambda)
         sqrtMat         = tf.linalg.cholesky(self.Lambda * self.P)
         
         self.assertEqual(SP.shape, (2 * self.nD + 1, self.nD))
@@ -453,13 +457,13 @@ class TestUKF(unittest.TestCase):
 
     def test_ukf_propagate(self):
         
-        SP1             = SigmaPoints(self.nD, self.m, self.P, self.Lambda)
-        yspLG           = UKF_Propagate("LG", self.nD, SP1, self.B)
+        SP1             = self.UKF.SigmaPoints(self.nD, self.m, self.P, self.Lambda)
+        yspLG           = self.UKF.UKF_Propagate("LG", self.nD, SP1, self.B)
         
         x0              = tf.random.uniform((self.nD*2,), 1e-3, 2.0, dtype=tf.float64)
         P0              = tf.linalg.diag(tf.random.uniform((self.nD*2,), 1e-3, 2.0, dtype=tf.float64))
-        SP              = SigmaPoints(self.nD*2, x0, P0, self.Lambda)
-        yspSV           = UKF_Propagate("SV", self.nD, SP, self.B)
+        SP              = self.UKF.SigmaPoints(self.nD*2, x0, P0, self.Lambda)
+        yspSV           = self.UKF.UKF_Propagate("SV", self.nD, SP, self.B)
 
         expected_LG     = SP1 @ tf.transpose(self.B) 
         expected_SV     = tf.math.exp(SP[:,:self.nD]/2) @ tf.transpose(self.B) * SP[:,self.nD:]
@@ -474,9 +478,9 @@ class TestUKF(unittest.TestCase):
         self.assertTrue(np.allclose(yspSV.numpy(), expected_SV.numpy()))
 
     def test_ukf_predict_mean(self):
-        wm, _, wi, _    = SigmaWeights(self.nD, self.alpha, self.kappa, self.beta)
-        sp              = SigmaPoints(self.nD, self.Xprev, self.P, self.Lambda)
-        mean            = UKF_Predict_mean(wm, wi, sp)
+        wm, _, wi, _    = self.UKF.SigmaWeights(self.nD, self.alpha, self.kappa, self.beta)
+        sp              = self.UKF.SigmaPoints(self.nD, self.Xprev, self.P, self.Lambda)
+        mean            = self.UKF.UKF_Predict_mean(wm, wi, sp)
         expected_mean   = wm * sp[0, :] + tf.reduce_sum(wi * sp[1:, :], axis=0)
         
         self.assertEqual(mean.shape, (self.nD,))
@@ -485,11 +489,11 @@ class TestUKF(unittest.TestCase):
 
 
     def test_ukf_predict_cov(self):
-        wm, wc, wi, _   = SigmaWeights(self.nD, self.alpha, self.kappa, self.beta)
-        sp              = SigmaPoints(self.nD, self.Xprev, self.P, self.Lambda)
-        mean            = UKF_Predict_mean(wm, wi, sp)
+        wm, wc, wi, _   = self.UKF.SigmaWeights(self.nD, self.alpha, self.kappa, self.beta)
+        sp              = self.UKF.SigmaPoints(self.nD, self.Xprev, self.P, self.Lambda)
+        mean            = self.UKF.UKF_Predict_mean(wm, wi, sp)
 
-        cov_result      = UKF_Predict_cov(self.nD, wc, wi, sp, mean, self.u)
+        cov_result      = self.UKF.UKF_Predict_cov(self.nD, wc, wi, sp, mean, self.u)
 
         diffs           = sp - mean
         expected_cov    = wc * tf.tensordot(diffs[0, :], diffs[0, :], axes=0)
@@ -504,15 +508,15 @@ class TestUKF(unittest.TestCase):
 
     def test_ukf_predict_crosscov(self):
         
-        wm, wc, wi, _   = SigmaWeights(self.nD, self.alpha, self.kappa, self.beta)
+        wm, wc, wi, _   = self.UKF.SigmaWeights(self.nD, self.alpha, self.kappa, self.beta)
         
-        sp              = SigmaPoints(self.nD, self.Xprev, self.P, self.Lambda)
-        mean            = UKF_Predict_mean(wm, wi, sp)
+        sp              = self.UKF.SigmaPoints(self.nD, self.Xprev, self.P, self.Lambda)
+        mean            = self.UKF.UKF_Predict_mean(wm, wi, sp)
         
-        sp2             = SigmaPoints(self.nD, self.X, self.P, self.Lambda)
-        mean2           = UKF_Predict_mean(wm, wi, sp)
+        sp2             = self.UKF.SigmaPoints(self.nD, self.X, self.P, self.Lambda)
+        mean2           = self.UKF.UKF_Predict_mean(wm, wi, sp2)
 
-        cov_result      = UKF_Predict_crosscov(self.nD, wc, wi, sp, mean, sp2, mean2, self.u)
+        cov_result      = self.UKF.UKF_Predict_crosscov(self.nD, wc, wi, sp, mean, sp2, mean2, self.u)
 
         diffs           = sp - mean
         diffs2          = sp2 - mean2
@@ -526,12 +530,12 @@ class TestUKF(unittest.TestCase):
         self.assertTrue(np.allclose(cov_result.numpy(), expected_cov.numpy()))
 
     def test_ukf_predict(self):
-        wm, wc, wi, L           = SigmaWeights(self.nD, self.alpha, self.kappa, self.beta)
+        wm, wc, wi, L           = self.UKF.SigmaWeights(self.nD, self.alpha, self.kappa, self.beta)
         x0                      = tf.ones((self.nD*2,), dtype=tf.float64)
         P0                      = tf.ones((self.nD*2,self.nD*2), dtype=tf.float64)
 
-        ypred, Wpred, Cpred     = UKF_Predict("LG", self.nD, self.X, self.P, wm, wc, wi, L, self.B, self.W, self.u)
-        ypred2, Wpred2, Cpred2  = UKF_Predict("SV", self.nD, x0, P0, wm, wc, wi, L, self.B, self.W, self.u) 
+        ypred, Wpred, Cpred     = self.UKF.UKF_Predict("LG", self.nD, self.X, self.P, wm, wc, wi, L, self.B, self.W, self.u)
+        ypred2, Wpred2, Cpred2  = self.UKF.UKF_Predict("SV", self.nD, x0, P0, wm, wc, wi, L, self.B, self.W, self.u) 
 
         self.assertEqual(ypred.shape, (self.nD,))
         self.assertEqual(Wpred.shape, (self.nD,self.nD))
@@ -542,7 +546,7 @@ class TestUKF(unittest.TestCase):
         self.assertEqual(Cpred2.shape, (self.nD,self.nD))
 
     def test_ukf_gain(self):
-        K               = UKF_Gain(self.P, self.W, self.u)
+        K               = self.UKF.Gain(self.P, self.W, self.u)
         expected_K      = self.P @ tf.linalg.inv(self.W + self.u)
 
         self.assertEqual(K.shape, (self.nD,self.nD))
@@ -551,8 +555,8 @@ class TestUKF(unittest.TestCase):
         
     def test_ukf_filter(self):
 
-        K               = UKF_Gain(self.P, self.W, self.u)
-        x, P            = UKF_Filter(self.Xprev, self.P, self.W, self.X, self.Y, K)
+        K               = self.UKF.Gain(self.P, self.W, self.u)
+        x, P            = self.UKF.Filter(self.Xprev, self.P, self.W, self.X, self.Y, K)
         expected_x      = self.Xprev + tf.linalg.matvec(K, self.X - self.Y)
         expected_P      = self.P - K @ self.W @ tf.transpose(K)
 
@@ -565,17 +569,17 @@ class TestUKF(unittest.TestCase):
     def test_unscented_kalman_filter(self):
 
         _, Y            = SSM(self.nT, self.nD, model="SV", A=self.A, B=self.B, V=self.V, W=self.W)
-        X_filtered      = UnscentedKalmanFilter(y=Y, model="SV", A=self.A, B=self.B, V=self.V, W=self.W)
+        X_filtered      = self.UKF.run(y=Y, model="SV", A=self.A, B=self.B, V=self.V, W=self.W)
 
         _, Y2           = SSM(self.nT, self.nD, B=self.B, V=self.V, W=self.W)
-        X_filtered2     = UnscentedKalmanFilter(y=Y2, B=self.B, V=self.V, W=self.W)
+        X_filtered2     = self.UKF.run(y=Y2, B=self.B, V=self.V, W=self.W)
 
         self.assertEqual(X_filtered.shape, (self.nT, self.nD))
-        self.assertTrue(isinstance(X_filtered, tf.Variable))
+        self.assertTrue(isinstance(X_filtered, tf.Tensor))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered)))
 
         self.assertEqual(X_filtered2.shape, (self.nT, self.nD))
-        self.assertTrue(isinstance(X_filtered2, tf.Variable))
+        self.assertTrue(isinstance(X_filtered2, tf.Tensor))
         self.assertTrue(tf.reduce_all(tf.math.is_finite(X_filtered2)))
 
 

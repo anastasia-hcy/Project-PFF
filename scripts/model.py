@@ -4,6 +4,24 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 
+##############################
+#  Gaussian random variables # 
+############################## 
+
+def norm_rvs(n, mean, Sigma):
+    """Generate and return Gaussian random variables, x, using Cholesky decomposition and standard Normal given the expectation and covariance matrix, mean and Sigma."""
+    chol            = tf.linalg.cholesky(Sigma)
+    x_par           = tf.random.normal((n,), dtype=tf.float64)
+    x               = tf.linalg.matvec(chol, x_par) + mean
+    return x
+
+def initiate_particles(N, n, mu0, Sigma0):
+    """Draw and return a set of initial particles, x0, from the importance distribution, Gaussian with mean and covariance, m0 and Sigma0."""
+    x0              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
+    for i in range(N):  
+        x0[i,:].assign( norm_rvs(n, mu0, Sigma0) )
+    return x0 
+
 #########################################################
 #  Squared Exponential Kernels, Covariance & Divergence # 
 #########################################################
@@ -33,24 +51,6 @@ def SE_Cov_div(ndims, x, scale=None, length=None):
             Md[i,j].assign(vd)
             Md[j,i].assign(-vd)
     return M, Md
-
-##############################
-#  Gaussian random variables # 
-############################## 
-
-def norm_rvs(n, mean, Sigma):
-    """Generate and return Gaussian random variables, x, using Cholesky decomposition and standard Normal given the expectation and covariance matrix, mean and Sigma."""
-    chol            = tf.linalg.cholesky(Sigma)
-    x_par           = tf.random.normal((n,), dtype=tf.float64)
-    x               = tf.linalg.matvec(chol, x_par) + mean
-    return x
-
-def initiate_particles(N, n, mu0, Sigma0):
-    """Draw and return a set of initial particles, x0, from the importance distribution, Gaussian with mean and covariance, m0 and Sigma0."""
-    x0              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
-    for i in range(N):  
-        x0[i,:].assign( norm_rvs(n, mu0, Sigma0) )
-    return x0 
 
 ######################################
 #  Linear Gaussian State Space Model # 
