@@ -4,10 +4,6 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 
-##############################
-#  Gaussian random variables # 
-############################## 
-
 def norm_rvs(n, mean, Sigma):
     """Generate and return Gaussian random variables, x, using Cholesky decomposition and standard Normal given the expectation and covariance matrix, mean and Sigma."""
     chol            = tf.linalg.cholesky(Sigma)
@@ -15,21 +11,9 @@ def norm_rvs(n, mean, Sigma):
     x               = tf.linalg.matvec(chol, x_par) + mean
     return x
 
-def initiate_particles(N, n, mu0, Sigma0):
-    """Draw and return a set of initial particles, x0, from the importance distribution, Gaussian with mean and covariance, m0 and Sigma0."""
-    x0              = tf.Variable(tf.zeros((N,n), dtype=tf.float64)) 
-    for i in range(N):  
-        x0[i,:].assign( norm_rvs(n, mu0, Sigma0) )
-    return x0 
-
-#########################################################
-#  Squared Exponential Kernels, Covariance & Divergence # 
-#########################################################
-
 def SE_kernel(x1, x2, scale, length):
     """The Squared Exponential (SE) kernel given two points, x1 and x2, and the two parameters, scale and length."""
     return (scale**2) * tf.math.exp( - (x1-x2)**2 / (2*length) ) 
-
 
 def SE_kernel_divC(x1, x2, length):
     """Compute and return the constant part of the derivative of Squared Exponential (SE) kernel given two points, x1 and x2, and the length parameter."""
@@ -52,19 +36,11 @@ def SE_Cov_div(ndims, x, scale=None, length=None):
             Md[j,i].assign(-vd)
     return M, Md
 
-######################################
-#  Linear Gaussian State Space Model # 
-######################################
-
 def LG_Jacobi(Ones, B):
     """Compute and return the Jacobian matrices of the linear Gaussian SSM."""
     Jx              = tf.linalg.diag( tf.reduce_sum(B, axis=1) )
     Jw              = tf.linalg.diag( Ones )
     return Jx, Jw
-
-###############################
-# Stochastic Volatility Model # 
-###############################
 
 def SV_transform(B, x):
     """Compute and return the transformation of the stochastic volatility model given the system states, x."""
@@ -86,10 +62,6 @@ def SV_Jacobi(gx, y):
     Jw2             = tf.where( tf.math.logical_and(tf.math.is_inf(Jw), Jw < 0.0), tf.cast(-1e9, tf.float64), Jw2 )
     Jw2             = tf.where( tf.math.is_nan(Jw), tf.cast(0.0, tf.float64), Jw2 )
     return Jx, Jw2
-
-############################
-# Location Sensoring Model # 
-############################
 
 def sensor_transform(x):
     """Compute and return the transformation of the location sensoring model given the system states, x."""
@@ -121,10 +93,6 @@ def sensor_Jacobi(x):
     J[1,1].assign( z2part / (x[0] - sensor2[0]) )
     
     return J
-    
-##############################################
-# Non-linear non-Gaussian State Space Model # 
-##############################################
 
 def measurements(model, n, m, B, x, W, U=None):
     """Compute and return the measurements of the specified model given the states, x, and other parameters."""

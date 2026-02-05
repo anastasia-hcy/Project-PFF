@@ -2,8 +2,8 @@
 # Set directory #
 #################
 
-path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PPF/"
-pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PPFResults/"
+path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PFF/"
+pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PFF/data/"
 
 import os, sys
 os.chdir(path)
@@ -119,39 +119,44 @@ def cumulative_mse(nTimes, ndims, xhat, x):
     return MSE 
 
 from scripts import KalmanFilter, ExtendedKalmanFilter, UnscentedKalmanFilter, StandardParticleFilter
-from scripts import ExactDH, LocalExactDH, KernelParticleFlow
 
 KF              = KalmanFilter(nTimes=nT, ndims=nD)
 EKF             = ExtendedKalmanFilter(nTimes=nT, ndims=nD)
 UKF             = UnscentedKalmanFilter(nTimes=nT, ndims=nD)
 PF              = StandardParticleFilter(nTimes=nT, ndims=nD)
-EDH             = ExactDH(nTimes=nT, ndims=nD)
-LEDH            = LocalExactDH(nTimes=nT, ndims=nD)
-KernelPFF       = KernelParticleFlow(nTimes=nT, ndims=nD, nx=nX)
 
 X1_KF           = KF.run(y=Y1)
 X1_EKF          = EKF.run(y=Y1)
 X1_UKF          = UKF.run(y=Y1)
 X1_PF, ess1_PF, weights1_PF, particles1_PF, particles2_1_PF = PF.run(y=Y1, N=Np)
 
-X1_EDH_EKF, ess1_EDH_EKF, weights1_EDH_EKF, Jx1_EDH_EKF, Jw1_EDH_EKF = EDH.run(y=Y1, N=Np)
-X1_EDH, ess1_EDH, weights1_EDH, Jx1_EDH, Jw1_EDH = EDH.run(y=Y1, N=Np, method='UKF')
-X1_LEDH_EKF, ess1_LEDH_EKF, weights1_LEDH_EKF, Jx1_LEDH_EKF, Jw1_LEDH_EKF = LEDH.run(y=Y1, N=Np)
-X1_LEDH, ess1_LEDH, weights1_LEDH, Jx1_LEDH, Jw1_LEDH = LEDH.run(y=Y1, N=Np, method='UKF')    
-
-X1_Kernel_scalar, particles1_Kernel_scalar, particles2_Kernel_scalar, Jx1_Kernel_scalar, Jw1_Kernel_scalar = KernelPFF.run(y=Y1, Nx=nX, N=Np, B=B_sparse, method="scalar")  
-X1_Kernel, particles1_Kernel, particles2_Kernel, Jx1_Kernel, Jw1_Kernel = KernelPFF.run(y=Y1, Nx=nX, N=Np, B=B_sparse, method="kernel")  
-
-
 X_KF = KF.run(y=Y, model="SV", A=A, V=Cx)
 X_EKF = EKF.run(y=Y, model="SV", V=Cx)
 X_UKF = UKF.run(y=Y, model="SV", A=A, V=Cx)
 X_PF, ess_PF, weights_PF, particles_PF, particles2_PF = PF.run(y=Y, model="SV", V=Cx, N=Np)
 
+from scripts import ExactDH, LocalExactDH, KernelParticleFlow
+
+EDH             = ExactDH(nTimes=10, ndims=nD)
+LEDH            = LocalExactDH(nTimes=10, ndims=nD)
+KernelPFF       = KernelParticleFlow(nTimes=10, ndims=Ny, nx=nX)
+
+X1_EDH_EKF, ess1_EDH_EKF, weights1_EDH_EKF, Jx1_EDH_EKF, Jw1_EDH_EKF = EDH.run(y=Y1[:10,], N=Np)
+X1_EDH, ess1_EDH, weights1_EDH, Jx1_EDH, Jw1_EDH = EDH.run(y=Y1[:10,], N=Np, method='UKF')
+
+X1_LEDH_EKF, ess1_LEDH_EKF, weights1_LEDH_EKF, Jx1_LEDH_EKF, Jw1_LEDH_EKF = LEDH.run(y=Y1[:10,], N=Np)
+X1_LEDH, ess1_LEDH, weights1_LEDH, Jx1_LEDH, Jw1_LEDH = LEDH.run(y=Y1[:10,], N=Np, method='UKF')    
+
+X1_Kernel_scalar, particles1_Kernel_scalar, particles2_1_Kernel_scalar, Jx1_Kernel_scalar, Jw1_Kernel_scalar = KernelPFF.run(y=Y1_sparse[:10,], N=Np, B=B_sparse, method="scalar")  
+X1_Kernel, particles1_Kernel, particles2_1_Kernel, Jx1_Kernel, Jw1_Kernel = KernelPFF.run(y=Y1_sparse[:10,], N=Np, B=B_sparse, method="kernel")  
+
 X_EDH_EKF, ess_EDH_EKF, weights_EDH_EKF, Jx_EDH_EKF, Jw_EDH_EKF = EDH.run(y=Y, model="SV", V=Cx, N=Np)
 X_EDH, ess_EDH, weights_EDH, Jx_EDH, Jw_EDH = EDH.run(y=Y, model="SV", V=Cx, N=Np, method='UKF')
 X_LEDH_EKF, ess_LEDH_EKF, weights_LEDH_EKF, Jx_LEDH_EKF, Jw_LEDH_EKF = LEDH.run(y=Y, model="SV", V=Cx, N=Np)
 X_LEDH, ess_LEDH, weights_LEDH, Jx_LEDH, Jw_LEDH = LEDH.run(y=Y, model="SV", V=Cx, N=Np, method='UKF')
+
+X_Kernel_scalar, particles_Kernel_scalar, particles2_Kernel_scalar, Jx_Kernel_scalar, Jw_Kernel_scalar = KernelPFF.run(y=Y, model="SV",N=Np, B=B_sparse, method="scalar")  
+X_Kernel, particles_Kernel, particles2_Kernel, Jx_Kernel, Jw_Kernel = KernelPFF.run(y=Y, model="SV", N=Np, B=B_sparse, method="kernel")  
 
 fig, ax = plt.subplots(1,2, figsize=(12,4))
 for i in range(nD):
@@ -221,15 +226,6 @@ print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
 
 
 
-
-
-
-
-
-
-
-
-
 ######### 
 # Plots #
 ######### 
@@ -294,15 +290,6 @@ plt.show()
 Load results
 """
 
-X_KF            = KalmanFilter(Y1)
-X1_EKF          = ExtendedKalmanFilter(Y1)
-X_EKF           = ExtendedKalmanFilter(Y, V=Cx, model="SV")
-X1_UKF          = UnscentedKalmanFilter(Y1)
-X_UKF           = UnscentedKalmanFilter(Y, V=Cx, model="SV")
-    
-X_PF1, ess_PF1, weights_PF1, particles_PF1, particles2_PF1 = ParticleFilter(Y1, N=Np)
-X_PF, ess_PF, weights_PF, particles_PF, particles2_PF = ParticleFilter(Y, V=Cx, model="SV", N=Np)
-        
 with open(pathdat+"res_EDH.pkl", 'rb') as file:
     res_EDH = pkl.load(file)
     
@@ -447,119 +434,7 @@ Jx_LEDH_SDE_EKF      = res_LEDH['Jx']
 Jw_LEDH_SDE_EKF      = res_LEDH['Jw']
 
 
-X_DPF_1, ess_DPF_1, weights_DPF_1, particles_DPF_1, particles2_DPF_1 = DifferentialParticleFilter(Y1, N=Np)
-X_DPF_MH_1, ess_DPF_MH_1, weights_DPF_MH_1, particles_DPF_MH_1, particles2_DPF_MH_1 = DifferentialParticleFilter(Y1, N=Np, backpropagation="Multi-Head")
 
-
-"""
-Plots of results
-"""
-
-mse_ekf =  cumulative_mse(nT, X_EKF, X)
-mse_ekf_1 =  cumulative_mse(nT, X1_EKF, X1)
-mse_ukf = cumulative_mse(nT, X_UKF, X)
-mse_ukf_1 = cumulative_mse(nT, X1_UKF, X1)
-
-mse_pf_1 = cumulative_mse(nT, X_PF1, X1)
-mse_edh_ekf_1 = cumulative_mse(nT, X_EDH_EKF_1, X1)
-mse_edh_1 = cumulative_mse(nT, X_EDH_1, X1)
-mse_ledh_ekf_1 = cumulative_mse(nT, X_LEDH_EKF_1, X1)
-mse_ledh_1 = cumulative_mse(nT, X_LEDH_1, X1)
-
-mse_pf = cumulative_mse(nT, X_PF, X)
-mse_edh_ekf = cumulative_mse(nT, X_EDH_EKF, X)
-mse_edh = cumulative_mse(nT, X_EDH, X)
-mse_ledh_ekf = cumulative_mse(nT, X_LEDH_EKF, X)
-mse_ledh = cumulative_mse(nT, X_LEDH, X)
-
-mse_kpff2_1 = cumulative_mse(nT, X_KPFF2_1, X1_sparse)
-mse_kpff_1 = cumulative_mse(nT, X_KPFF_1, X1_sparse)
-mse_kpff2 = cumulative_mse(nT, X_KPFF2, X_sparse)
-mse_kpff = cumulative_mse(nT, X_KPFF, X_sparse)
-
-mse_sde_1 = cumulative_mse(nT, X_SDE_1, X1)
-mse_sde_homo_1 = cumulative_mse(nT, X_SDE_1_homo, X1)
-
-mse_ledh_sde_ekf_1 = cumulative_mse(nT, X_LEDH_SDE_EKF_1, X1)
-mse_ledh_sde_1 = cumulative_mse(nT, X_LEDH_SDE_1, X1)
-
-mse_dpf_1 = cumulative_mse(nT, X_DPF_1, X1)
-mse_dpf_mh_1 = cumulative_mse(nT, X_DPF_MH_1, X1)
-
-fig, ax = plt.subplots(1, 2, figsize=(12,4))
-ax[0].plot(mse_pf_1, linewidth=1, alpha=0.75, color='green') 
-# ax[0].plot(mse_edh_1, linewidth=1, alpha=0.75, color='blue') 
-# ax[0].plot(mse_ledh_1, linewidth=1, alpha=0.75, linestyle='dashed', color='blue') 
-ax[0].plot(mse_edh_ekf_1, linewidth=1, alpha=0.75, color='red') 
-ax[0].plot(mse_ledh_ekf_1, linewidth=1, alpha=0.75, linestyle='dashed', color='blue') 
-
-ax[1].plot(mse_pf, linewidth=1, alpha=0.75, color='green') 
-# ax[1].plot(mse_edh, linewidth=1, alpha=0.75, color='blue') 
-# ax[1].plot(mse_ledh, linewidth=1, alpha=0.75,  linestyle='dashed',color='blue')  
-ax[1].plot(mse_edh_ekf, linewidth=1, alpha=0.75, color='red') 
-ax[1].plot(mse_ledh_ekf, linewidth=1, alpha=0.75, linestyle='dashed', color='blue') 
-plt.tight_layout()
-plt.show()
-
-
-fig, ax = plt.subplots(1, 2, figsize=(12,4))
-ax[0].plot(mse_kpff2_1, linewidth=1, alpha=0.75, color='green') 
-ax[0].plot(mse_kpff_1, linewidth=1, alpha=0.75, color='red') 
-
-ax[1].plot(mse_kpff2, linewidth=1, alpha=0.75, color='green') 
-# ax[1].plot(mse_kpff, linewidth=1, alpha=0.75, color='red')  
-plt.tight_layout()
-plt.show()
-
-fig, ax = plt.subplots(figsize=(6,4))
-plt.plot(mse_sde_1, linewidth=1, alpha=0.75, color='green') 
-plt.plot(mse_sde_homo_1, linewidth=1, alpha=0.75, color='blue') 
-plt.show()
-
-
-fig, ax = plt.subplots(1, 2, figsize=(12,4))
-ax[1].plot(mse_ledh, linewidth=1, alpha=0.75, color='blue') 
-ax[1].plot(mse_ledh_ekf, linewidth=1, alpha=0.75, color='red') 
-ax[0].plot(mse_ledh_1, linewidth=1, alpha=0.75, color='blue') 
-ax[0].plot(mse_ledh_ekf_1, linewidth=1, alpha=0.75, color='red') 
-plt.tight_layout()
-plt.show()
-
-
-fig, ax = plt.subplots(figsize=(6,4))
-plt.plot(mse_dpf_1, linewidth=1, alpha=0.75, color='green') 
-plt.plot(mse_dpf_mh_1, linewidth=1, alpha=0.75, color='blue') 
-plt.show()
-
-
-
-fig, ax = plt.subplots(1,2, figsize=(12,4))
-for i in range(nD):
-    ax[0].plot(X1[:,i], linewidth=1, alpha=0.5, color='green') 
-    ax[0].plot(X_KF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='purple') 
-    ax[0].plot(X1_EKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
-    ax[0].plot(X1_UKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='blue') 
-for i in range(nD):
-    ax[1].plot(X[:,i], linewidth=1, alpha=0.5, color='green') 
-    ax[1].plot(X_EKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
-    ax[1].plot(X_UKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='blue') 
-plt.tight_layout()
-plt.show()
-
-
-
-
-fig, ax = plt.subplots(figsize=(6,4)) 
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.5, color='green') 
-    plt.plot(X_PF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
-plt.show() 
-
-fig, ax = plt.subplots(figsize=(6,4))
-for i in range(nD):
-    plt.plot(X1[:,i], linewidth=1, alpha=0.5, color='green') 
-    plt.plot(X_PF1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
-plt.show() 
 
 
 j = 43
@@ -587,128 +462,6 @@ plt.tight_layout()
 plt.show()
 
 
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_EDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    plt.plot(X_EDH_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
-plt.show() 
-
-
-for i in range(nD):
-    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_EDH_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    plt.plot(X_EDH_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
-plt.show() 
-
-
-
-fig, ax = plt.subplots(1,2, figsize=(12,4))
-for i in range(nD):
-    ax[1].plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
-    ax[1].plot(X_LEDH[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    ax[1].plot(X_LEDH_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue') 
-
-    ax[0].plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    ax[0].plot(X_LEDH_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    ax[0].plot(X_LEDH_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue') 
-plt.tight_layout()
-plt.show() 
- 
- 
-fig, ax = plt.subplots(1,2, figsize=(12,4))
-for i in range(nD):
-    ax[1].plot(mse_ledh_1, linewidth=1, alpha=0.5, linestyle='dashed', color='blue')  
-    ax[1].plot(mse_ledh, linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
-
-    ax[0].plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    ax[0].plot(X_LEDH_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue')
-    ax[0].plot(X_LEDH_SDE_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-plt.tight_layout()
-plt.show() 
-
-fig, ax = plt.subplots(1,2, figsize=(12,4))
-for i in range(nD):
-    ax[0].plot(mse_ledh_sde_1, linewidth=1, alpha=0.5, linestyle='dashed', color='blue')  
-    ax[0].plot(mse_ledh_sde_ekf_1, linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
-
-    ax[1].plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    ax[1].plot(X_LEDH_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue')
-    ax[1].plot(X_LEDH_SDE_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-plt.tight_layout()
-plt.show() 
- 
-
-    
-for i in observed:
-    plt.plot(X1_sparse[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_KPFF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.plot(X_KPFF2_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed')     
-plt.show() 
-
-for i in observed:
-    plt.plot(X_sparse[:,i], linewidth=1, alpha=0.75) 
-    plt.plot(X_KPFF2[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.plot(X_KPFF[:,i], linewidth=1, alpha=0.75, linestyle='dashed') 
-    plt.show() 
-
-
-fig, ax = plt.subplots(1,2, figsize=(12,4))
-for i in unobserved:
-    ax[0].plot(X1_sparse[:,i], linewidth=1, alpha=0.75, color='green') 
-    ax[0].plot(X_KPFF_1[:,i],  linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    ax[0].plot(X_KPFF2_1[:,i],  linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
-
-    ax[1].plot(X_sparse[:,i],  linewidth=1, alpha=0.75, color='green') 
-    ax[1].plot(X_KPFF2[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    ax[1].plot(X_KPFF[:,i],   linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
-plt.tight_layout()
-plt.show()
- 
-
-
-counts = np.arange(1,nT+1,1)
-fig, ax = plt.subplots(1,2, figsize=(12,4))
-for i in range(nD):
-    ax[0].plot(np.cumsum(np.square(X_SDE_1[:,i] - X1[:,i]), axis=-1) / counts, linewidth=1, alpha=0.5, color='red')
-    # ax[0].plot(np.cumsum(np.square(X_SDE_1_homo[:,i] - X1[:,i]), axis=-1) / counts, linewidth=1, alpha=0.5, color='blue')
-for i in range(nD):
-    ax[1].plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    ax[1].plot(X_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    # ax[1].plot(X_SDE_1_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue') 
-plt.tight_layout()
-plt.show() 
-
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red') 
-    plt.plot(X_SDE_homo[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange') 
-plt.show() 
-
-
-
-for i in range(nD):
-    plt.plot(X[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_LEDH_SDE[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='blue')
-    plt.plot(X_LEDH_SDE_EKF[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='purple')
-plt.show() 
-    
-for i in range(nD):
-    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_LEDH_SDE_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='red')
-    plt.plot(X_LEDH_SDE_EKF_1[:,i], linewidth=1, alpha=0.75, linestyle='dashed', color='orange')
-plt.show() 
-
-
-
-fig, ax = plt.subplots(figsize=(6,4))
-for i in range(nD):
-    plt.plot(X1[:,i], linewidth=1, alpha=0.75, color='green') 
-    plt.plot(X_DPF_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
-    plt.plot(X_DPF_MH_1[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red')  
-plt.show() 
-    
-    
-   
 
 
 #############################

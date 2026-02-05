@@ -195,7 +195,7 @@ class UnscentedKalmanFilter:
             cov         += weighti * tf.tensordot(diffs[ndims+i,:], diffs2[ndims+i,:], axes=0)
         return cov + u
 
-    def Predict(self, model, ndims, xpred, Ppred, w0m, w0c, wi, Lamb, A, B, W, U):
+    def Predict(self, model, ndims, xpred, Ppred, w0m, w0c, wi, Lamb, B, W, U):
         """Compute and return the estimated means, covariance and cross-covariance of the transformed variables with additive noises."""
         
         if model == "LG":
@@ -260,7 +260,7 @@ class UnscentedKalmanFilter:
             x_pred                  = self.Predict_mean(weight0_m, weighti, X_sp) 
             P_pred                  = self.Predict_cov(self.ndims, weight0_c, weighti, X_sp, x_pred, U, Cov=V)  
 
-            y_pred, W_pred, C_pred  = self.Predict(model, self.ndims, x_pred, P_pred, weight0_m, weight0_c, weighti, L, A, B, W, U)
+            y_pred, W_pred, C_pred  = self.Predict(model, self.ndims, x_pred, P_pred, weight0_m, weight0_c, weighti, L, B, W, U)
             K                       = self.Gain(C_pred, W_pred, U)
             x_filt, P_filt          = self.Filter(x_pred, P_pred, W_pred, y[i,:], y_pred, K)
 

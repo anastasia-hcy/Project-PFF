@@ -1,9 +1,10 @@
+path            = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PFF/"
+pathdat         = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PFF/data/"
+pathres         = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PFFResults/"
 
 import multiprocessing
 import os, sys
-
-from main import X1_EDH_EKF
-
+os.chdir(path)
 pythonw_path = os.path.join(sys.prefix, 'pythonw.exe')
 if os.path.exists(pythonw_path) and sys.executable != pythonw_path:
     multiprocessing.set_executable(pythonw_path)
@@ -14,8 +15,6 @@ import psutil
 import time
 from scripts import norm_rvs
 from scripts import ExactDH, LocalExactDH, KernelParticleFlow 
-
-pathdat         = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PPFResults/"
 
 nT              = 100
 nD              = 4
@@ -43,7 +42,7 @@ Cx_sparse       = data['sparse_Cx']
 
 EDH             = ExactDH(nTimes=nT, ndims=nD)
 LEDH            = LocalExactDH(nTimes=nT, ndims=nD)
-KernelPFF       = KernelParticleFlow(nTimes=nT, ndims=nD, nx=nX)
+KernelPFF       = KernelParticleFlow(nTimes=nT, ndims=Ny, nx=nX)
 
 def background_task_trial(nTimes, ndims, x, C, path):
     res = np.zeros((nTimes,ndims))
@@ -137,22 +136,72 @@ def background_ledh_ukf(y, N, path):
                   "cpu": [cpu_time_taken, memory_increase_mib]}, file)
 
 
+def background_kernel_scalar(y, B, N, path):
+    
+    start_cpu_time  = time.process_time()
+    initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+    X1_Kernel_scalar, particles1_Kernel_scalar, particles2_Kernel_scalar, Jx1_Kernel_scalar, Jw1_Kernel_scalar = KernelPFF.run(y=y, N=N, B=B, method="scalar")
+
+    final_rss       = psutil.Process(os.getpid()).memory_info().rss
+    memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+    end_cpu_time    = time.process_time()
+    cpu_time_taken = end_cpu_time - start_cpu_time    
+    
+    with open(path+"res_Kernel_Scalar_LG.pkl", 'wb') as file:
+        pkl.dump({"res": X1_Kernel_scalar, 
+                  "parts": particles1_Kernel_scalar,
+                  "parts2": particles2_Kernel_scalar,
+                  "Jx": Jx1_Kernel_scalar, 
+                  "Jw": Jw1_Kernel_scalar,
+                  "cpu": [cpu_time_taken, memory_increase_mib]}, file)
+
+def background_kernel(y, B, N, path):
+    
+    start_cpu_time  = time.process_time()
+    initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+    X1_Kernel, particles1_Kernel, particles2_Kernel, Jx1_Kernel, Jw1_Kernel = KernelPFF.run(y=y, N=N, B=B, method="kernel")  
+
+    final_rss       = psutil.Process(os.getpid()).memory_info().rss
+    memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+    end_cpu_time    = time.process_time()
+    cpu_time_taken = end_cpu_time - start_cpu_time    
+    
+    with open(path+"res_Kernel_LG.pkl", 'wb') as file:
+        pkl.dump({"res": X1_Kernel, 
+                  "parts": particles1_Kernel,
+                  "parts2": particles2_Kernel,
+                  "Jx": Jx1_Kernel, 
+                  "Jw": Jw1_Kernel,
+                  "cpu": [cpu_time_taken, memory_increase_mib]}, file)
+        
+
 
 if __name__ == '__main__':
     
-    p = multiprocessing.Process(target=background_task_trial, args=(nT, nD, Y, Cx, pathdat,))
+    p = multiprocessing.Process(target=background_task_trial, args=(nT, nD, Y, Cx, pathres,))
     p.start()
 
-    p2 = multiprocessing.Process(target=background_edh_ekf, args=(Y1, Np, pathdat,))
+    p2 = multiprocessing.Process(target=background_edh_ekf, args=(Y1, Np, pathres,))
     p2.start()
     
-    p3 = multiprocessing.Process(target=background_edh_ukf, args=(Y1, Np, pathdat,))
+    p3 = multiprocessing.Process(target=background_edh_ukf, args=(Y1, Np, pathres,))
     p3.start()
 
-    p4 = multiprocessing.Process(target=background_ledh_ekf, args=(Y1, Np, pathdat,))
+    p4 = multiprocessing.Process(target=background_ledh_ekf, args=(Y1, Np, pathres,))
     p4.start()
     
-    p5 = multiprocessing.Process(target=background_ledh_ukf, args=(Y1, Np, pathdat,))
+    p5 = multiprocessing.Process(target=background_ledh_ukf, args=(Y1, Np, pathres,))
     p5.start()
 
+    p6 = multiprocessing.Process(target=background_ledh_ekf, args=(Y1, Np, pathres,))
+    p6.start()
+    
+    p7 = multiprocessing.Process(target=background_kernel_scalar, args=(Y1_sparse, B_sparse, 30, pathres,))
+    p7.start()
 
+    p8 = multiprocessing.Process(target=background_kernel, args=(Y1_sparse, B_sparse, 30, pathres,))
+    p8.start()

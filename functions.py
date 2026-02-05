@@ -5,7 +5,7 @@ import tensorflow_probability as tfp
 tfd = tfp.distributions
 tf.random.set_seed(123)
 
-from .model import initiate_particles, norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
+from .scripts.model import initiate_particles, norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
 from .functions2 import LEDH_SDE_Hessians, LEDH_SDE_flow_dynamics, soft_resample
 
 def EKF_Predict(x_prev, P_prev, A, V):

@@ -7,7 +7,7 @@ tf.random.set_seed(123)
 
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve 
-from .model import initiate_particles, norm_rvs, measurements_pred
+from .scripts.model import initiate_particles, norm_rvs, measurements_pred
 
 ############################
 # Stochastic Particle Flow # 
@@ -32,6 +32,9 @@ def final_solve(Lambda, mu, HessianLogPrior, HessianLogLikelihood, U):
     root            = fsolve(initial_solve_err, [1e-6], args=(args,))
     sol             = solve_ivp(Dai22eq28, [0,1], y0=root, args=(args,), t_eval=Lambda) 
     return tf.constant(sol.y[0], dtype=tf.float64)
+
+
+
     
 def Dai22eq22(beta, mu, HessianLogPrior, HessianLogLikelihood, Q, U):
     """Compute and return the negative Hessian matrix, Jacobian matrix and stiffness, M, F, and kappa, using equation (22) in Dai et al. (2022)."""

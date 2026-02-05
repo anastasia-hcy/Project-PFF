@@ -9,8 +9,6 @@ from .model import norm_rvs, measurements_pred, measurements_Jacobi, measurement
 from .KalmanFilters import ExtendedKalmanFilter, UnscentedKalmanFilter
 from .ParticleFilter import StandardParticleFilter
 
-
-
 def Li17eq10(L, H, P, R, U):
     """Compute and return the first component, A, of the particle flow dynamics, Ax + b, under the assumption of linear Gaussian."""
     C           = tf.linalg.inv( L * H @ P @ tf.transpose(H) + R + U )
@@ -22,8 +20,6 @@ def Li17eq11(I, L, A, H, P, R, y, ei, e0i, U):
     M2          = (I + L * A) @ P @ tf.transpose(H) @ tf.linalg.inv(R + U)
     v           = tf.linalg.matvec(M2, (y - ei)) + tf.linalg.matvec(A, e0i)
     return tf.linalg.matvec(M1, v)
-
-
 
 class ExactDH: 
 
@@ -74,7 +70,7 @@ class ExactDH:
         yLL             = self.PF.LogLikelihood(y, muy, SigmaY, U)
         for i in range(N):  
             Lp = Lp.write( i, yLL + self.PF.LogTarget(eta1[i,:], xprev[i,:], SigmaX) - self.PF.LogImportance(eta0[i,:], xprev[i,:], SigmaX) )  
-        return Lp
+        return Lp.stack()
 
 
     def run(self, *, y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, mu=None, method=None, stepsize=None):
@@ -185,6 +181,7 @@ class LocalExactDH:
         
         eta0            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
         eta             = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
+
         m               = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
         P               = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
         y               = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
@@ -211,7 +208,7 @@ class LocalExactDH:
             Cy          = Cy.write(i, Cyi)
             err         = err.write(i, yi_pred - tf.linalg.matvec(Jxi, eta[i,:]) )
 
-        return eta, eta0, m, P, y, H, Hw, Cy, err
+        return eta, eta0, m.stack(), P.stack(), y.stack(), H.stack(), Hw.stack(), Cy.stack(), err.stack()
 
     def LEDH_update_EKF(self, N, m0, P0, y, yhat, Hx, Hw, W, U):
         """Compute the Extended Kalman Gain and return the updated covariance matricies of the particles."""
@@ -220,13 +217,14 @@ class LocalExactDH:
             K           = self.EKF.Gain(P0[i,:,:], Hx[i,:,:], Hw[i,:,:], W, U)
             _, Pi       = self.EKF.Filter(m0[i,:], P0[i,:,:], y, yhat[i,:], Hx[i,:,:], K)
             P           = P.write(i, Pi)
-        return P
+        return P.stack()
 
     def LEDH_linearize_UKF(self, N, n, model, I1, xprev, Pprev, A, B, V, W, wm, wc, wi, L, U):
         """Predict the pseudo particles, eta and eta0, by UKF using the previous state and its associated particles, xhat and xprev."""
         
         eta0            = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
         eta             = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
+
         m               = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
         P               = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
         y               = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
@@ -258,7 +256,7 @@ class LocalExactDH:
             Hw          = Hw.write(i, Jwi)
             err         = err.write(i, yi_pred - tf.linalg.matvec(Jxi, mi_pred) )        
         
-        return eta, eta0, m, P, y, H, Hw, Cy, CyCross, err 
+        return eta, eta0, m.stack(), P.stack(), y.stack(), H.stack(), Hw.stack(), Cy.stack(), CyCross.stack(), err.stack() 
 
 
     def LEDH_update_UKF(self, N, m0, P0, y, yhat, W_pred, C_pred, U):
@@ -268,7 +266,7 @@ class LocalExactDH:
             K           = self.UKF.Gain(C_pred[i,:,:], W_pred[i,:,:], U)
             _, Pi       = self.UKF.Filter(m0[i,:], P0[i,:,:], W_pred[i,:,:], y, yhat[i,:], K)
             P           = P.write(i, Pi)
-        return P
+        return P.stack()
 
     def LEDH_flow_dynamics(self, N, n, Lamb, epsilon, I, eta, eta0, Pi, Hi, Ri, err, y, U):
         """Compute and return the flow dynamics of the pseudo particles for migration."""
@@ -285,10 +283,10 @@ class LocalExactDH:
 
     def LEDH_flow_lp(self, N, eta0, theta, eta1, xprev, y, SigmaX, muy, SigmaY, U):
         """Compute and return the log posterior of the migrated pseudo particles."""
-        Lp              = tf.Variable(tf.zeros((N,), dtype=tf.float64)) 
+        Lp              = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
         for i in range(N):  
-            Lp[i].assign( tf.math.log(theta[i]) + self.PF.LogLikelihood(y, muy[i,:], SigmaY[i,:,:], U) + self.PF.LogTarget(eta1[i,:], xprev[i,:], SigmaX[i,:,:]) - self.PF.LogImportance(eta0[i,:], xprev[i,:], SigmaX[i,:,:]) )  
-        return Lp
+            Lp = Lp.write(i, tf.math.log(theta[i]) + self.PF.LogLikelihood(y, muy[i,:], SigmaY[i,:,:], U) + self.PF.LogTarget(eta1[i,:], xprev[i,:], SigmaX[i,:,:]) - self.PF.LogImportance(eta0[i,:], xprev[i,:], SigmaX[i,:,:]) )  
+        return Lp.stack() 
 
     def run(self, y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, mu=None, method=None, stepsize=None):
         """Run the LEDH and return the filtered states, X_filtered."""
@@ -409,16 +407,13 @@ class KernelParticleFlow:
         for i in range(N):            
             yi_pred     = measurements_pred(model, n, muy, B, x[i,:], W, Uy)      
             Hx, Hw      = measurements_Jacobi(model, I, x[i,:], yi_pred, B)     
-
             Hxj         = tf.reshape(tf.linalg.diag_part(Hx), [n,1])
             Jx          = tf.tile(Hxj, [1,nx])          
-
-            lpi         = self.Hu21eq13(model, y, yi_pred, Jx, Hw, W, Uy) - self.Hu21eq15(x[i,:], mu0, Sigma0, U)
-            
+            lpi         = self.Hu21eq13(model, y, yi_pred, Jx, Hw, W, Uy) - self.Hu21eq15(x[i,:], mu0, Sigma0, U)            
             JxC         = JxC.write(i, Jx)
             JwC         = JwC.write(i, Hw)
             LP          = LP.write(i, lpi)            
-        return LP, JxC, JwC
+        return LP.stack(), JxC.stack(), JwC.stack()
 
     def KPFF_RKHS(self, N, n, x, Lp, Sigma0):
         In              = tf.Variable(tf.zeros((N,n), dtype=tf.float64))
@@ -433,18 +428,18 @@ class KernelParticleFlow:
         for i in range(N):
             field       = tf.linalg.matvec( Sigma0, integral[i,:] )
             xadd        = xadd.write(i, epsilon * field)
-        return xadd 
+        return xadd.stack()
     
-    def run(self, *, y, model=None, A=None, B=None, V=None, W=None, N=None, mu0=None, mu=None, method=None, stepsize=None):
+    def run(self, *, y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, mu=None, method=None, stepsize=None):
 
         model                       = "LG" if model is None else model      
         if model == "SV" and A is None : 
             A                       = tf.eye(self.nx, dtype=tf.float64) * 0.5  
         if model != "SV" and A is None : 
             A                       = tf.eye(self.nx, dtype=tf.float64) 
-        if self.ndims != self.nx and B is None:
+        if self.nx is not None and B is None:
             B           = tf.ones((self.ndims, self.nx), dtype=tf.float64)
-        if self.ndims == self.nx and B is None: 
+        if self.nx is None and B is None: 
             B           = tf.eye(self.ndims, dtype=tf.float64) 
         V                           = tf.eye(self.nx, dtype=tf.float64) if V is None else V
         W                           = tf.eye(self.ndims, dtype=tf.float64) if W is None else W
@@ -488,16 +483,13 @@ class KernelParticleFlow:
                 if method == "kernel":
                     II  = self.KPFF_RKHS(Np, self.nx, x_prev, grad, Sigma0)
 
-                x_move  = self.KPFF_flow(Np, self.nx, Rates[j], II, Sigma0)
-                x_prev.assign_add(x_move) 
-                
-                JacobiX[i,j,:,:,:].assign(Jx)
-                JacobiW[i,j,:,:,:].assign(Jw)
+                x_move  = self.KPFF_flow(Np, Rates[j], II, Sigma0)
+                x_prev.assign_add(x_move)
 
-            x_hat       = tf.Variable( tf.reduce_mean(x_prev, axis=0) )   
+            x_hat       = tf.Variable( tf.reduce_mean(x_prev, axis=0) )    
 
-            X_part2     = X_part2.write(i, x_prev)         
             X_filtered  = X_filtered.write(i, x_hat)
+            X_part2     = X_part2.write(i, x_prev)    
             JacobiX     = JacobiX.write(i, Jx)
             JacobiW     = JacobiW.write(i, Jw)
 
