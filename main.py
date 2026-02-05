@@ -3,7 +3,7 @@
 #################
 
 path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PPF/"
-pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PPF/data/"
+pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PPFResults/"
 
 import os, sys
 os.chdir(path)
@@ -111,34 +111,37 @@ Cx_sparse       = data['sparse_Cx']
 #############################################
 
 def cumulative_mse(nTimes, ndims, xhat, x):
-    counts = np.arange(1,nTimes+1,1)
-    MSE = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
+    counts      = np.arange(1,nTimes+1,1)
+    MSE         = tf.Variable(tf.zeros((nTimes, ndims), dtype=tf.float64))
     for i in range(ndims):
-        mseSum = np.cumsum(np.mean(np.square(xhat[:,i] - x[:,i]), axis=-1))
+        mseSum  = np.cumsum(np.mean(np.square(xhat[:,i] - x[:,i]), axis=-1))
         MSE[:,i].assign(mseSum / counts)    
     return MSE 
 
 from scripts import KalmanFilter, ExtendedKalmanFilter, UnscentedKalmanFilter, StandardParticleFilter
 from scripts import ExactDH, LocalExactDH, KernelParticleFlow
 
-KF = KalmanFilter(nTimes=nT, ndims=nD)
-EKF = ExtendedKalmanFilter(nTimes=nT, ndims=nD)
-UKF = UnscentedKalmanFilter(nTimes=nT, ndims=nD)
-PF = StandardParticleFilter(nTimes=nT, ndims=nD)
-EDH = ExactDH(nTimes=nT, ndims=nD)
-LEDH = LocalExactDH(nTimes=nT, ndims=nD)
-KernelPFF = KernelParticleFlow(nTimes=nT, ndims=nD, nx=nX)
+KF              = KalmanFilter(nTimes=nT, ndims=nD)
+EKF             = ExtendedKalmanFilter(nTimes=nT, ndims=nD)
+UKF             = UnscentedKalmanFilter(nTimes=nT, ndims=nD)
+PF              = StandardParticleFilter(nTimes=nT, ndims=nD)
+EDH             = ExactDH(nTimes=nT, ndims=nD)
+LEDH            = LocalExactDH(nTimes=nT, ndims=nD)
+KernelPFF       = KernelParticleFlow(nTimes=nT, ndims=nD, nx=nX)
 
-
-X1_KF = KF.run(y=Y1)
-X1_EKF = EKF.run(y=Y1)
-X1_UKF = UKF.run(y=Y1)
+X1_KF           = KF.run(y=Y1)
+X1_EKF          = EKF.run(y=Y1)
+X1_UKF          = UKF.run(y=Y1)
 X1_PF, ess1_PF, weights1_PF, particles1_PF, particles2_1_PF = PF.run(y=Y1, N=Np)
 
-X1_EDH_EKF, ess1_EDH_EKF, weights1_EDH_EKF, Jx_EDH_EKF_1, Jw1_EDH_EKF = EDH.run(y=Y1, N=Np)
+X1_EDH_EKF, ess1_EDH_EKF, weights1_EDH_EKF, Jx1_EDH_EKF, Jw1_EDH_EKF = EDH.run(y=Y1, N=Np)
 X1_EDH, ess1_EDH, weights1_EDH, Jx1_EDH, Jw1_EDH = EDH.run(y=Y1, N=Np, method='UKF')
 X1_LEDH_EKF, ess1_LEDH_EKF, weights1_LEDH_EKF, Jx1_LEDH_EKF, Jw1_LEDH_EKF = LEDH.run(y=Y1, N=Np)
 X1_LEDH, ess1_LEDH, weights1_LEDH, Jx1_LEDH, Jw1_LEDH = LEDH.run(y=Y1, N=Np, method='UKF')    
+
+X1_Kernel_scalar, particles1_Kernel_scalar, particles2_Kernel_scalar, Jx1_Kernel_scalar, Jw1_Kernel_scalar = KernelPFF.run(y=Y1, Nx=nX, N=Np, B=B_sparse, method="scalar")  
+X1_Kernel, particles1_Kernel, particles2_Kernel, Jx1_Kernel, Jw1_Kernel = KernelPFF.run(y=Y1, Nx=nX, N=Np, B=B_sparse, method="kernel")  
+
 
 X_KF = KF.run(y=Y, model="SV", A=A, V=Cx)
 X_EKF = EKF.run(y=Y, model="SV", V=Cx)

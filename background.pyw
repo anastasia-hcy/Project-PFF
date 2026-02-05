@@ -1,30 +1,21 @@
-###################
-# Set executables #
-###################
 
 import multiprocessing
 import os, sys
+
+from main import X1_EDH_EKF
 
 pythonw_path = os.path.join(sys.prefix, 'pythonw.exe')
 if os.path.exists(pythonw_path) and sys.executable != pythonw_path:
     multiprocessing.set_executable(pythonw_path)
 
-############# 
-# Libraries #
-#############
-
 import numpy as np
 import pickle as pkl 
-from scripts import norm_rvs, SDE
-
 import psutil
 import time
+from scripts import norm_rvs
+from scripts import ExactDH, LocalExactDH, KernelParticleFlow 
 
-######################### 
-# Datasets & parameters #
-#########################
-
-pathdat         = "C:/Users/anastasia/MyProjects/JPMorgan/data/"
+pathdat         = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PPFResults/"
 
 nT              = 100
 nD              = 4
@@ -32,19 +23,27 @@ nX              = 10
 Ny              = nX - 2
 unobserved      = [3,7]
 observed        = [0,1,2,4,5,6,8,9]
-
 Np              = 100
 
 with open(pathdat+"data_sim.pkl", 'rb') as file:
     data        = pkl.load(file)    
-
+X1              = data['LG_States']
 Y1              = data['LG_Obs']
+X               = data['SV_States']
 Y               = data['SV_Obs']
 A               = data['A']
 Cx              = data['Cx']
+X1_sparse       = data['sparse_LG_States']
+Y1_sparse       = data['sparse_LG_Obs']
+X_sparse        = data['sparse_States']
+Y_sparse        = data['sparse_Obs']
+A_sparse        = data['sparse_A']
+B_sparse        = data['sparse_B']
+Cx_sparse       = data['sparse_Cx']
 
-
-
+EDH             = ExactDH(nTimes=nT, ndims=nD)
+LEDH            = LocalExactDH(nTimes=nT, ndims=nD)
+KernelPFF       = KernelParticleFlow(nTimes=nT, ndims=nD, nx=nX)
 
 def background_task_trial(nTimes, ndims, x, C, path):
     res = np.zeros((nTimes,ndims))
@@ -53,97 +52,89 @@ def background_task_trial(nTimes, ndims, x, C, path):
     with open(path+"bg_try.pkl", 'wb') as file:
         pkl.dump({'res':res}, file)         
 
-
-
-
-
-# def background_task0_EKF(y, N, T, path):
-    
-#     start_cpu_time  = time.process_time()
-#     initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-#     X_LEDH_SDE_1, ess_LEDH_SDE_1, weights_LEDH_SDE_1, Jx_LEDH_SDE_1, Jw_LEDH_SDE_1 = LEDH(y, N=N, Nstep=T, method='EKF', stochastic=True)
-    
-#     final_rss       = psutil.Process(os.getpid()).memory_info().rss
-#     memory_increase_mib_1 = (final_rss - initial_rss) / (1024 ** 2)
-
-#     end_cpu_time    = time.process_time()
-#     cpu_time_taken_1 = end_cpu_time - start_cpu_time    
-    
-#     with open(path+"res_LEDH_SDE_EKF_LG.pkl", 'wb') as file:
-#         pkl.dump({"res": X_LEDH_SDE_1, 
-#                   "ess": ess_LEDH_SDE_1,
-#                   "weights": weights_LEDH_SDE_1,
-#                   "Jx": Jx_LEDH_SDE_1, 
-#                   "Jw": Jw_LEDH_SDE_1,
-#                   "cpu": [cpu_time_taken_1, memory_increase_mib_1]}, file)
-
-
-# def background_task0_UKF(y, N, T, path):
-    
-#     start_cpu_time  = time.process_time()
-#     initial_rss     = psutil.Process(os.getpid()).memory_info().rss
-
-#     X_LEDH_SDE_1, ess_LEDH_SDE_1, weights_LEDH_SDE_1, Jx_LEDH_SDE_1, Jw_LEDH_SDE_1 = LEDH(y, N=N, Nstep=T, method='UKF', stochastic=True)
-    
-#     final_rss       = psutil.Process(os.getpid()).memory_info().rss
-#     memory_increase_mib_1 = (final_rss - initial_rss) / (1024 ** 2)
-
-#     end_cpu_time    = time.process_time()
-#     cpu_time_taken_1 = end_cpu_time - start_cpu_time    
-    
-#     with open(path+"res_LEDH_SDE_UKF_LG.pkl", 'wb') as file:
-#         pkl.dump({"res": X_LEDH_SDE_1, 
-#                   "ess": ess_LEDH_SDE_1,
-#                   "weights": weights_LEDH_SDE_1,
-#                   "Jx": Jx_LEDH_SDE_1, 
-#                   "Jw": Jw_LEDH_SDE_1,
-#                   "cpu": [cpu_time_taken_1, memory_increase_mib_1]}, file)
-
-
-
-
-def background_task(y, N, path):
+def background_edh_ekf(y, N, path):
     
     start_cpu_time  = time.process_time()
     initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-    X_SDE, cond, stiff, beta = SDE(y, N=N, linear=True)
-    
+    X1_EDH_EKF, ess1_EDH_EKF, weights1_EDH_EKF, Jx1_EDH_EKF, Jw1_EDH_EKF = EDH.run(y=y, N=N)
+
     final_rss       = psutil.Process(os.getpid()).memory_info().rss
     memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
 
     end_cpu_time    = time.process_time()
-    cpu_time_taken  = end_cpu_time - start_cpu_time    
+    cpu_time_taken = end_cpu_time - start_cpu_time    
     
-    with open(path+"res_SDE_LG.pkl", 'wb') as file:
-        pkl.dump({"res": X_SDE,
-                  "cond": cond,
-                  "stiff": stiff,
-                  "beta": beta,
+    with open(path+"res_EDH_EKF_LG.pkl", 'wb') as file:
+        pkl.dump({"res": X1_EDH_EKF, 
+                  "ess": ess1_EDH_EKF,
+                  "weights": weights1_EDH_EKF,
+                  "Jx": Jx1_EDH_EKF, 
+                  "Jw": Jw1_EDH_EKF,
                   "cpu": [cpu_time_taken, memory_increase_mib]}, file)
 
-
-def background_task2(y, N, path):
+def background_edh_ukf(y, N, path):
     
     start_cpu_time  = time.process_time()
     initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-    X_SDE, cond, stiff, beta = SDE(y, N=N, linear=False)
-    
+    X1_EDH, ess1_EDH, weights1_EDH, Jx1_EDH, Jw1_EDH = EDH.run(y=y, N=N, method='UKF')
+
     final_rss       = psutil.Process(os.getpid()).memory_info().rss
     memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
 
     end_cpu_time    = time.process_time()
-    cpu_time_taken  = end_cpu_time - start_cpu_time    
+    cpu_time_taken = end_cpu_time - start_cpu_time    
     
-    with open(path+"res_SDE_LG_homo.pkl", 'wb') as file:
-        pkl.dump({"res": X_SDE,
-                  "cond": cond,
-                  "stiff": stiff,
-                  "beta": beta,
+    with open(path+"res_EDH_LG.pkl", 'wb') as file:
+        pkl.dump({"res": X1_EDH, 
+                  "ess": ess1_EDH,
+                  "weights": weights1_EDH,
+                  "Jx": Jx1_EDH, 
+                  "Jw": Jw1_EDH,
                   "cpu": [cpu_time_taken, memory_increase_mib]}, file)
 
+def background_ledh_ekf(y, N, path):
+    
+    start_cpu_time  = time.process_time()
+    initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+    X1_LEDH_EKF, ess1_LEDH_EKF, weights1_LEDH_EKF, Jx1_LEDH_EKF, Jw1_LEDH_EKF = LEDH.run(y=y, N=N)
+
+    final_rss       = psutil.Process(os.getpid()).memory_info().rss
+    memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+    end_cpu_time    = time.process_time()
+    cpu_time_taken = end_cpu_time - start_cpu_time    
+    
+    with open(path+"res_LEDH_EKF_LG.pkl", 'wb') as file:
+        pkl.dump({"res": X1_LEDH_EKF, 
+                  "ess": ess1_LEDH_EKF,
+                  "weights": weights1_LEDH_EKF,
+                  "Jx": Jx1_LEDH_EKF, 
+                  "Jw": Jw1_LEDH_EKF,
+                  "cpu": [cpu_time_taken, memory_increase_mib]}, file)
+
+def background_ledh_ukf(y, N, path):
+    
+    start_cpu_time  = time.process_time()
+    initial_rss     = psutil.Process(os.getpid()).memory_info().rss
+
+    X1_LEDH, ess1_LEDH, weights1_LEDH, Jx1_LEDH, Jw1_LEDH = LEDH.run(y=y, N=N, method='UKF')
+
+    final_rss       = psutil.Process(os.getpid()).memory_info().rss
+    memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
+
+    end_cpu_time    = time.process_time()
+    cpu_time_taken = end_cpu_time - start_cpu_time    
+    
+    with open(path+"res_LEDH_LG.pkl", 'wb') as file:
+        pkl.dump({"res": X1_LEDH, 
+                  "ess": ess1_LEDH,
+                  "weights": weights1_LEDH,
+                  "Jx": Jx1_LEDH, 
+                  "Jw": Jw1_LEDH,
+                  "cpu": [cpu_time_taken, memory_increase_mib]}, file)
 
 
 
@@ -152,17 +143,16 @@ if __name__ == '__main__':
     p = multiprocessing.Process(target=background_task_trial, args=(nT, nD, Y, Cx, pathdat,))
     p.start()
 
-    # p20 = multiprocessing.Process(target=background_task0_EKF, args=(Y1, Np, Ns, pathdat,))
-    # p20.start()
-    
-    # p30 = multiprocessing.Process(target=background_task0_UKF, args=(Y1, Np, Ns, pathdat,))
-    # p30.start()
-
-    p2 = multiprocessing.Process(target=background_task, args=(Y1, Np, pathdat,))
+    p2 = multiprocessing.Process(target=background_edh_ekf, args=(Y1, Np, pathdat,))
     p2.start()
     
-    p3 = multiprocessing.Process(target=background_task2, args=(Y1, Np, pathdat,))
+    p3 = multiprocessing.Process(target=background_edh_ukf, args=(Y1, Np, pathdat,))
     p3.start()
 
+    p4 = multiprocessing.Process(target=background_ledh_ekf, args=(Y1, Np, pathdat,))
+    p4.start()
+    
+    p5 = multiprocessing.Process(target=background_ledh_ukf, args=(Y1, Np, pathdat,))
+    p5.start()
 
 
