@@ -4,6 +4,7 @@
 
 path                = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PFF/"
 pathdat             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PFF/data/"
+pathres             = "C:/Users/CSRP.CSRP-PC13/Projects/Practice/PFFResults/"
 
 import os, sys
 os.chdir(path)
@@ -40,7 +41,6 @@ def get_current_process_ram_usage():
     print(f"Current process RAM usage (VMS): {vms_mib:.2f} MiB")
 
 get_current_process_ram_usage()
-
 
 ##################### 
 # Simulate datasets #
@@ -106,6 +106,8 @@ A_sparse        = data['sparse_A']
 B_sparse        = data['sparse_B']
 Cx_sparse       = data['sparse_Cx']
 
+
+
 ############################################# 
 # Reproduce results using simulated dataset #
 #############################################
@@ -135,29 +137,6 @@ X_EKF = EKF.run(y=Y, model="SV", V=Cx)
 X_UKF = UKF.run(y=Y, model="SV", A=A, V=Cx)
 X_PF, ess_PF, weights_PF, particles_PF, particles2_PF = PF.run(y=Y, model="SV", V=Cx, N=Np)
 
-from scripts import ExactDH, LocalExactDH, KernelParticleFlow
-
-EDH             = ExactDH(nTimes=10, ndims=nD)
-LEDH            = LocalExactDH(nTimes=10, ndims=nD)
-KernelPFF       = KernelParticleFlow(nTimes=10, ndims=Ny, nx=nX)
-
-X1_EDH_EKF, ess1_EDH_EKF, weights1_EDH_EKF, Jx1_EDH_EKF, Jw1_EDH_EKF = EDH.run(y=Y1[:10,], N=Np)
-X1_EDH, ess1_EDH, weights1_EDH, Jx1_EDH, Jw1_EDH = EDH.run(y=Y1[:10,], N=Np, method='UKF')
-
-X1_LEDH_EKF, ess1_LEDH_EKF, weights1_LEDH_EKF, Jx1_LEDH_EKF, Jw1_LEDH_EKF = LEDH.run(y=Y1[:10,], N=Np)
-X1_LEDH, ess1_LEDH, weights1_LEDH, Jx1_LEDH, Jw1_LEDH = LEDH.run(y=Y1[:10,], N=Np, method='UKF')    
-
-X1_Kernel_scalar, particles1_Kernel_scalar, particles2_1_Kernel_scalar, Jx1_Kernel_scalar, Jw1_Kernel_scalar = KernelPFF.run(y=Y1_sparse[:10,], N=Np, B=B_sparse, method="scalar")  
-X1_Kernel, particles1_Kernel, particles2_1_Kernel, Jx1_Kernel, Jw1_Kernel = KernelPFF.run(y=Y1_sparse[:10,], N=Np, B=B_sparse, method="kernel")  
-
-X_EDH_EKF, ess_EDH_EKF, weights_EDH_EKF, Jx_EDH_EKF, Jw_EDH_EKF = EDH.run(y=Y, model="SV", V=Cx, N=Np)
-X_EDH, ess_EDH, weights_EDH, Jx_EDH, Jw_EDH = EDH.run(y=Y, model="SV", V=Cx, N=Np, method='UKF')
-X_LEDH_EKF, ess_LEDH_EKF, weights_LEDH_EKF, Jx_LEDH_EKF, Jw_LEDH_EKF = LEDH.run(y=Y, model="SV", V=Cx, N=Np)
-X_LEDH, ess_LEDH, weights_LEDH, Jx_LEDH, Jw_LEDH = LEDH.run(y=Y, model="SV", V=Cx, N=Np, method='UKF')
-
-X_Kernel_scalar, particles_Kernel_scalar, particles2_Kernel_scalar, Jx_Kernel_scalar, Jw_Kernel_scalar = KernelPFF.run(y=Y, model="SV",N=Np, B=B_sparse, method="scalar")  
-X_Kernel, particles_Kernel, particles2_Kernel, Jx_Kernel, Jw_Kernel = KernelPFF.run(y=Y, model="SV", N=Np, B=B_sparse, method="kernel")  
-
 fig, ax = plt.subplots(1,2, figsize=(12,4))
 for i in range(nD):
     ax[0].plot(X1[:,i], linewidth=1, alpha=0.5, color='green') 
@@ -167,7 +146,6 @@ for i in range(nD):
     ax[0].plot(X1_PF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
 for i in range(nD):
     ax[1].plot(X[:,i], linewidth=1, alpha=0.5, color='green') 
-    # ax[1].plot(X_KF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='purple') 
     ax[1].plot(X_EKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
     ax[1].plot(X_UKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='blue') 
     ax[1].plot(X_PF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
@@ -175,36 +153,96 @@ plt.tight_layout()
 plt.show()
 
 
-start_cpu_time  = time.process_time()
-initial_rss     = psutil.Process(os.getpid()).memory_info().rss
 
-X_KF            = KalmanFilter(y=Y1)
+j = 43
+a1 = np.linspace(-7,4, 100)
+a2 = np.linspace(-7,4, 100)
+bx, by = np.meshgrid(a1,a2)
+pos = np.dstack((bx, by))
+rv = multivariate_normal([X_PF[j-1,0], X_PF[j-1,1]], Cx[0:2,0:2])
+bz = rv.pdf(pos)
 
-# X1_EKF          = ExtendedKalmanFilter(Y1)
-# X_EKF           = ExtendedKalmanFilter(Y, V=Cx, model="SV")
+fig, ax = plt.subplots(figsize=(6,4))
+plt.contour(bx,by,bz,levels=10, alpha=0.5)
+plt.scatter(particles_PF[j,:,0], particles_PF[j,:,1], color='black',alpha=0.5)
+plt.scatter(particles2_PF[j,:,0], particles2_PF[j,:,1], color='red')
+plt.show()
 
-# X1_UKF          = UnscentedKalmanFilter(Y1)
-# X_UKF           = UnscentedKalmanFilter(Y, V=Cx, model="SV")
+counts = np.arange(1,nT+1,1)
+fig, ax = plt.subplots(1,2, figsize=(12,4))
+for i in range(nD):
+    ax[0].plot(np.cumsum(np.square(X_PF[:,i] - X[:,i]), axis=-1) / counts, linewidth=1, alpha=0.5) 
+ax[1].contour(bx,by,bz,levels=10, alpha=0.5)
+ax[1].scatter(particles_PF[j,:,0], particles_PF[j,:,1], color='black',alpha=0.5)
+ax[1].scatter(particles2_PF[j,:,0], particles2_PF[j,:,1], color='red')
+plt.tight_layout()
+plt.show()
 
-# X_PF1, ess_PF1, weights_PF1, particles_PF1, particles2_PF1 = ParticleFilter(Y1, N=Np)
-# X_PF, ess_PF, weights_PF, particles_PF, particles2_PF = ParticleFilter(Y, V=Cx, model="SV", N=Np)
 
-# X_EDH_EKF_1, ess_EDH_EKF_1, weights_EDH_EKF_1, Jx_EDH_EKF_1, Jw_EDH_EKF_1 = EDH(Y1, N=Np, method='EKF')
-# X_EDH_1, ess_EDH_1, weights_EDH_1, Jx_EDH_1, Jw_EDH_1 = EDH(Y1, N=Np, method='UKF')
-# X_EDH_EKF, ess_EDH_EKF, weights_EDH_EKF, Jx_EDH_EKF, Jw_EDH_EKF = EDH(Y, V=Cx, model="SV", N=Np, method='EKF')
-# X_EDH, ess_EDH, weights_EDH, Jx_EDH, Jw_EDH = EDH(Y, V=Cx, model="SV", N=Np, method='UKF')
 
-# X_LEDH_EKF_1, ess_LEDH_EKF_1, weights_LEDH_EKF_1, Jx_LEDH_EKF_1, Jw_LEDH_EKF_1 = LEDH(Y1, N=Np, method='EKF')
-# X_LEDH_1, ess_LEDH_1, weights_LEDH_1, Jx_LEDH_SDE_1, Jw_LEDH_SDE_1 = LEDH(Y1, N=Np, method='UKF')    
-# X_LEDH_EKF, ess_LEDH_EKF, weights_LEDH_EKF, Jx_LEDH_EKF, Jw_LEDH_EKF = LEDH(Y, V=Cx, model="SV", N=Np, method='EKF')
-# X_LEDH, ess_LEDH, weights_LEDH, Jx_LEDH, Jw_LEDH = LEDH(Y, V=Cx, model="SV", N=Np, method='UKF')
 
-# X_KPFF2_1, Jx_KPFF2_1, Jw_KPFF2_1, particles_KPFF2_1, particles2_KPFF2_1    = KernelPFF(Y1_sparse, Nx=nX, N=Np, B=B_sparse, method="scalar")
-# X_KPFF_1, Jx_KPFF_1, Jw_KPFF_1, particles_KPFF_1, particles2_KPFF_1         = KernelPFF(Y1_sparse, Nx=nX, N=Np, B=B_sparse)
 
-# X_KPFF2, Jx_KPFF2, Jw_KPFF2, particles_KPFF2, particles2_KPFF2 = KernelPFF(Y_sparse, model="SV", Nx=nX, B=B_sparse, N=Np, Sigma0=tf.eye(nX, dtype=tf.float64), method="scalar")
-# X_KPFF, Jx_KPFF, Jw_KPFF, particles_KPFF, particles2_KPFF = KernelPFF(Y_sparse, model="SV", Nx=nX, B=B_sparse, N=Np, Sigma0=tf.eye(nX, dtype=tf.float64))
- 
+from scripts import ExactDH, LocalExactDH, KernelParticleFlow
+
+EDH             = ExactDH(nTimes=nT, ndims=nD)
+LEDH            = LocalExactDH(nTimes=nT, ndims=nD)
+KernelPFF       = KernelParticleFlow(nTimes=nT, ndims=Ny, nx=nX)
+
+X1_EDH_EKF, ess1_EDH_EKF, weights1_EDH_EKF, Jx1_EDH_EKF, Jw1_EDH_EKF = EDH.run(y=Y1, N=Np)
+X1_EDH, ess1_EDH, weights1_EDH, Jx1_EDH, Jw1_EDH = EDH.run(y=Y1, N=Np, method='UKF')
+
+X1_LEDH_EKF, ess1_LEDH_EKF, weights1_LEDH_EKF, Jx1_LEDH_EKF, Jw1_LEDH_EKF = LEDH.run(y=Y1, N=Np)
+X1_LEDH, ess1_LEDH, weights1_LEDH, Jx1_LEDH, Jw1_LEDH = LEDH.run(y=Y1, N=Np, method='UKF')    
+
+LEDH.run(y=Y1, N=Np, stochastic=True)
+LEDH.run(y=Y1, N=Np, method='UKF', stochastic=True)    
+
+X1_Kernel_scalar, particles1_Kernel_scalar, particles2_1_Kernel_scalar, Jx1_Kernel_scalar, Jw1_Kernel_scalar = KernelPFF.run(y=Y1_sparse, N=Np, B=B_sparse, method="scalar")  
+X1_Kernel, particles1_Kernel, particles2_1_Kernel, Jx1_Kernel, Jw1_Kernel = KernelPFF.run(y=Y1_sparse, N=Np, B=B_sparse, method="kernel")  
+
+X_EDH_EKF, ess_EDH_EKF, weights_EDH_EKF, Jx_EDH_EKF, Jw_EDH_EKF = EDH.run(y=Y, model="SV", V=Cx, N=Np)
+X_EDH, ess_EDH, weights_EDH, Jx_EDH, Jw_EDH = EDH.run(y=Y, model="SV", V=Cx, N=Np, method='UKF')
+X_LEDH_EKF, ess_LEDH_EKF, weights_LEDH_EKF, Jx_LEDH_EKF, Jw_LEDH_EKF = LEDH.run(y=Y, model="SV", V=Cx, N=Np)
+X_LEDH, ess_LEDH, weights_LEDH, Jx_LEDH, Jw_LEDH = LEDH.run(y=Y, model="SV", V=Cx, N=Np, method='UKF')
+
+X_Kernel_scalar, particles_Kernel_scalar, particles2_Kernel_scalar, Jx_Kernel_scalar, Jw_Kernel_scalar = KernelPFF.run(y=Y, model="SV",N=Np, B=B_sparse, method="scalar")  
+X_Kernel, particles_Kernel, particles2_Kernel, Jx_Kernel, Jw_Kernel = KernelPFF.run(y=Y, model="SV", N=Np, B=B_sparse, method="kernel")  
+
+
+with open(pathres+"res_LEDH_LG.pkl", 'rb') as file:
+    res_LEDH_LG = pkl.load(file)
+    
+X1_LEDH_LG            = res_LEDH_LG['res']
+ess1_LEDH_LG          = res_LEDH_LG['ess']
+weights1_LEDH_LG      = res_LEDH_LG['weights']
+Jx1_LEDH_LG           = res_LEDH_LG['Jx']
+Jw1_LEDH_LG           = res_LEDH_LG['Jw']
+
+for i in range(nD):
+    plt.plot(X1[:,i], linewidth=1, alpha=0.5, color='green') 
+    plt.plot(X1_LEDH_LG[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
+plt.show() 
+
+
+
+
+fig, ax = plt.subplots(1,2, figsize=(12,4))
+for i in range(nD):
+    ax[0].plot(X1[:,i], linewidth=1, alpha=0.5, color='green') 
+    ax[0].plot(X1_KF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='purple') 
+    ax[0].plot(X1_EKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
+    ax[0].plot(X1_UKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='blue') 
+    ax[0].plot(X1_LEDH_EKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='black') 
+    ax[0].plot(X1_PF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
+for i in range(nD):
+    ax[1].plot(X[:,i], linewidth=1, alpha=0.5, color='green') 
+    ax[1].plot(X_EKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='red') 
+    ax[1].plot(X_UKF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='blue') 
+    ax[1].plot(X_PF[:,i], linewidth=1, alpha=0.5, linestyle='dashed', color='orange') 
+plt.tight_layout()
+plt.show()
+
+
 # X_SDE_1, cond_1, stiff_1, beta_1 = SDE(Y1, N=N)
 # X_SDE_homo_1, cond_homo_1, stiff_homo_1, beta_homo_1 = SDE(Y1, N=Np, linear=False)
 
@@ -214,14 +252,6 @@ X_KF            = KalmanFilter(y=Y1)
 # X_DPF_1, ess_DPF_1, weights_DPF_1, particles_DPF_1, particles2_DPF_1 = DifferentialParticleFilter(Y1, N=Np)
 # X_DPF_MH_1, ess_DPF_MH_1, weights_DPF_MH_1, particles_DPF_MH_1, particles2_DPF_MH_1 = DifferentialParticleFilter(Y1, N=Np, backpropagation="Multi-Head")
 
-final_rss       = psutil.Process(os.getpid()).memory_info().rss
-memory_increase_mib = (final_rss - initial_rss) / (1024 ** 2)
-
-end_cpu_time    = time.process_time()
-cpu_time_taken  = end_cpu_time - start_cpu_time
-
-print(f"Memory increase during code block: {memory_increase_mib:.3f} MiB")
-print(f"CPU time taken: {cpu_time_taken:.3f} seconds")
 
 
 
@@ -317,34 +347,6 @@ weights_EDH_EKF_1 = res_EDH['weights_testLG_EKF']
 Jx_EDH_EKF_1    = res_EDH['Jx_testLG_EKF']
 Jw_EDH_EKF_1    = res_EDH['Jw_testLG_EKF']
 
-with open(pathdat+"res_LEDH.pkl", 'rb') as file:
-    res_LEDH = pkl.load(file)
-    
-X_LEDH            = res_LEDH['res']
-ess_LEDH          = res_LEDH['ess']
-weights_LEDH      = res_LEDH['weights']
-Jx_LEDH           = res_LEDH['Jx']
-Jw_LEDH           = res_LEDH['Jw']
-
-X_LEDH_EKF        = res_LEDH['res_EKF']
-ess_LEDH_EKF      = res_LEDH['ess_EKF']
-weights_LEDH_EKF  = res_LEDH['weights_EKF']
-Jx_LEDH_EKF       = res_LEDH['Jx_EKF']
-Jw_LEDH_EKF       = res_LEDH['Jw_EKF']
-
-X_LEDH_1          = res_LEDH['res_testLG']
-ess_LEDH_1        = res_LEDH['ess_testLG']
-weights_LEDH_1    = res_LEDH['weights_testLG']
-Jx_LEDH_1         = res_LEDH['Jx_testLG']
-Jw_LEDH_1         = res_LEDH['Jw_testLG']
-
-X_LEDH_EKF_1       = res_LEDH['res_testLG_EKF']
-ess_LEDH_EKF_1     = res_LEDH['ess_testLG_EKF']
-weights_LEDH_EKF_1 = res_LEDH['weights_testLG_EKF']
-Jx_LEDH_EKF_1      = res_LEDH['Jx_testLG_EKF']
-Jw_LEDH_EKF_1      = res_LEDH['Jw_testLG_EKF']
-
-
 
 with open(pathdat+"res_KPFF.pkl", 'rb') as file:
     res_KPFF = pkl.load(file)
@@ -436,30 +438,6 @@ Jw_LEDH_SDE_EKF      = res_LEDH['Jw']
 
 
 
-
-j = 43
-a1 = np.linspace(-7,4, 100)
-a2 = np.linspace(-7,4, 100)
-bx, by = np.meshgrid(a1,a2)
-pos = np.dstack((bx, by))
-rv = multivariate_normal([X_PF[j-1,0], X_PF[j-1,1]], Cx[0:2,0:2])
-bz = rv.pdf(pos)
-
-fig, ax = plt.subplots(figsize=(6,4))
-plt.contour(bx,by,bz,levels=10, alpha=0.5)
-plt.scatter(particles_PF[j,:,0], particles_PF[j,:,1], color='black',alpha=0.5)
-plt.scatter(particles2_PF[j,:,0], particles2_PF[j,:,1], color='red')
-plt.show()
-
-counts = np.arange(1,nT+1,1)
-fig, ax = plt.subplots(1,2, figsize=(12,4))
-for i in range(nD):
-    ax[0].plot(np.cumsum(np.square(X_PF[:,i] - X[:,i]), axis=-1) / counts, linewidth=1, alpha=0.5) 
-ax[1].contour(bx,by,bz,levels=10, alpha=0.5)
-ax[1].scatter(particles_PF[j,:,0], particles_PF[j,:,1], color='black',alpha=0.5)
-ax[1].scatter(particles2_PF[j,:,0], particles2_PF[j,:,1], color='red')
-plt.tight_layout()
-plt.show()
 
 
 

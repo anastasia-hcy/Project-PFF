@@ -19,7 +19,6 @@ def SE_kernel_divC(x1, x2, length):
     """Compute and return the constant part of the derivative of Squared Exponential (SE) kernel given two points, x1 and x2, and the length parameter."""
     return - (x1-x2) / length
 
-
 def SE_Cov_div(ndims, x, scale=None, length=None):
     """Compute the covariance matrix and the constant part of its derivatives, M and Md, using the Squared Exponential (SE) kernel given a vector, x"""
     scale           = 1.0 if scale is None else scale 

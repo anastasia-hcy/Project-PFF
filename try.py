@@ -769,7 +769,7 @@ preds = model3.predict(x=X_test)
 
 
 
-layer = tf.keras.layers.Dense(2, activation='relu')
+layer = keras.layers.Dense(2, activation='relu')
 x = tf.constant([[1., 2., 3.]])
 with tf.GradientTape() as tape:
   # Forward pass

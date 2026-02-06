@@ -8,6 +8,7 @@ tf.random.set_seed(123)
 from .model import norm_rvs, measurements_pred, measurements_Jacobi, measurements_covyHat, SE_Cov_div
 from .KalmanFilters import ExtendedKalmanFilter, UnscentedKalmanFilter
 from .ParticleFilter import StandardParticleFilter
+from .StochasticFlowFilters import StochasticPFF
 
 def Li17eq10(L, H, P, R, U):
     """Compute and return the first component, A, of the particle flow dynamics, Ax + b, under the assumption of linear Gaussian."""
@@ -175,6 +176,7 @@ class LocalExactDH:
         self.EKF        = ExtendedKalmanFilter(nTimes=nTimes, ndims=ndims)
         self.UKF        = UnscentedKalmanFilter(nTimes=nTimes, ndims=ndims)
         self.PF         = StandardParticleFilter(nTimes=nTimes, ndims=ndims)
+        self.SDE        = StochasticPFF(nTimes=nTimes, ndims=ndims)
 
     def LEDH_linearize_EKF(self, N, n, model, I1, xprev, Pprev, A, B, V, W, muy, U): 
         """Predict the pseudo particles, eta and eta0, by EKF using the previous state and its associated particles, xhat and xprev."""
@@ -287,8 +289,41 @@ class LocalExactDH:
         for i in range(N):  
             Lp = Lp.write(i, tf.math.log(theta[i]) + self.PF.LogLikelihood(y, muy[i,:], SigmaY[i,:,:], U) + self.PF.LogTarget(eta1[i,:], xprev[i,:], SigmaX[i,:,:]) - self.PF.LogImportance(eta0[i,:], xprev[i,:], SigmaX[i,:,:]) )  
         return Lp.stack() 
+    
+    def LEDH_SDE_Hessians(self, N, SigmaX, y, ypred, SigmaY, U):
+        """Compute and return the Hessians and Jacobian matricies of the log of the Normal distributions for the psuedo particles in LEDH."""
+        Jacob_LLike     = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
+        Hess_LLike      = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
+        Hess_Lprior     = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)
+        for i in range(N):   
+            Hess_LLike  = Hess_LLike.write(i, self.SDE.HessianLogNormal(SigmaY[i,:,:], U))
+            Hess_Lprior = Hess_Lprior.write(i, self.SDE.HessianLogNormal(SigmaX[i,:,:], U))
+            Jacob_LLike = Jacob_LLike.write(i, self.SDE.JacobiLogNormal(y, ypred[i,:], SigmaY[i,:,:], U))
+        return Hess_Lprior.stack(), Hess_LLike.stack(), Jacob_LLike.stack()
 
-    def run(self, y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, mu=None, method=None, stepsize=None):
+    def LEDH_SDE_flow_dynamics(self, N, n, eta0, eta1, SigmaX, ypred, SigmaY, beta, dL, HessPrior, HessLike, JacobLike, mc, w0, wI, Q, q, U):
+        """Compute and return the flow dynamics of the pseudo particles for migration in LEDH using the stochastic differential equations."""
+        deta            = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False) 
+        prod            = tf.TensorArray(tf.float64, size=N, dynamic_size=True, clear_after_read=False)   
+        for i in range(N):        
+            M, _, _     = self.SDE.Dai22eq22(beta, mc, HessPrior[i,:,:], HessLike[i,:,:], Q, U)
+            K1, K2      = self.SDE.Dai22eq11eq12(M, HessLike[i,:,:], Q, U)
+            
+            JacobPrior  = self.SDE.JacobiLogNormal(eta1[i,:], eta0[i,:], SigmaX[i,:,:], U)
+            muPost      = self.SDE.posterior_Gaussian_mean(eta0[i,:], ypred[i,:], SigmaX[i,:,:], SigmaY[i,:,:], U)
+            covPost     = self.SDE.posterior_Gaussian_cov(SigmaX[i,:,:], SigmaY[i,:,:], U)
+            JacobPost   = self.SDE.JacobiLogNormal(eta1[i,:], muPost, covPost, U)
+            JLP         = (1.0 - beta) * JacobPrior + beta * JacobPost  
+            
+            f           = self.SDE.drift_f(K1, K2, JLP, JacobLike[i,:])
+            dw          = norm_rvs(n, w0, dL * wI) 
+            
+            deta        = deta.write(i, f * dL + tf.linalg.matvec(q, dw) ) 
+            prod        = prod.write(i, tf.math.abs(dL * tf.math.reduce_prod(1 + f)) ) 
+
+        return deta.stack(), prod.stack()
+
+    def run(self, y, model=None, A=None, B=None, V=None, W=None, N=None, Nstep=None, mu0=None, mu=None, method=None, stepsize=None, stochastic=False):
         """Run the LEDH and return the filtered states, X_filtered."""
     
         model                       = "LG" if model is None else model      
@@ -318,8 +353,16 @@ class LocalExactDH:
             weight0_m, weight0_c, weighti, L = self.UKF.SigmaWeights(self.ndims)
         stepsize                    = 1e-3 if stepsize is None else stepsize     
         Nstep                       = 30 if Nstep is None else Nstep
-        Steps                       = tf.constant([stepsize * (1.2*i) for i in range(Nstep+1)], dtype=tf.float64)
-        Rates                       = tf.math.cumsum(Steps) 
+        
+        if stochastic: 
+            Rates       = tf.constant(tf.linspace(0.0, 1.0, Nstep + 1).numpy(), dtype=tf.float64)
+            mc          = 0.1 
+            Q           = tf.eye(self.ndims, dtype=tf.float64) 
+            q           = tf.linalg.cholesky(Q)
+            w0          = tf.zeros((self.ndims,), dtype=tf.float64)
+        else:
+            Steps       = tf.constant([stepsize * (1.2*i) for i in range(Nstep+1)], dtype=tf.float64)
+            Rates       = tf.math.cumsum(Steps) 
 
         P0                          = A @ Sigma0 @ tf.transpose(A) + V
         P_prev                      = tf.Variable(tf.zeros((Np, self.ndims, self.ndims), dtype=tf.float64))
@@ -342,45 +385,56 @@ class LocalExactDH:
                 eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, Rcross, el = self.LEDH_linearize_UKF(Np, self.ndims, model, I1, x_prev, P_prev, A, B, V, W, weight0_m, weight0_c, weighti, L, U)
             if method == "EKF":            
                 eta, eta0, m_pred, P_pred, y_pred, H, Hiw, R, el = self.LEDH_linearize_EKF(Np, self.ndims, model, I1, x_prev, P_prev, A, B, V, W, mu, U)
-                    
-        eta1        = eta0
-        theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
-        for j in range(1,Nstep+1): 
-            eta1_move, eta_move, theta_prod = self.LEDH_flow_dynamics(Np, self.ndims, Rates[j], Steps[j], I, eta, eta1, P_pred, H, R, el, y[i,:], U)                   
-            theta2 = theta * theta_prod
-            eta.assign_add(eta_move)
-            eta1.assign_add(eta1_move)
-            theta.assign(theta2)
             
-        lp          = self.LEDH_flow_lp(Np, eta0, theta, eta1, x_prev, y[i,:], P_pred, y_pred, R, U)       
-        w_pred      = self.PF.compute_weights(w_prev, lp)
-        w_norm      = self.PF.normalize_weights(w_pred)        
-        ness        = self.PF.compute_ESS(w_norm)
+            if stochastic: 
+                HessiansPrios, HessiansLike, JacobiLike = self.LEDH_SDE_Hessians(Np, P_pred, y[i,:], y_pred, R, U)
+        
+            eta1        = eta0
+            theta       = tf.Variable(tf.ones((Np,), dtype=tf.float64))
+            for j in range(1,Nstep+1): 
+                if stochastic: 
+                    dL  = Rates[j] - Rates[j-1]
+                    eta1_move, theta_prod = self.LEDH_SDE_flow_dynamics(Np, self.ndims, eta0, eta1, P_pred, y_pred, R, Rates[j], dL, HessiansPrios, HessiansLike, JacobiLike, mc, w0, I, Q, q, U)
+                    theta2 = theta * theta_prod
+                    eta1.assign_add(eta1_move)
+                    theta.assign(theta2)
+                else:
+                    eta1_move, eta_move, theta_prod = self.LEDH_flow_dynamics(Np, self.ndims, Rates[j], Steps[j], I, eta, eta1, P_pred, H, R, el, y[i,:], U)                   
+                    theta2 = theta * theta_prod
+                    eta.assign_add(eta_move)
+                    eta1.assign_add(eta1_move)
+                    theta.assign(theta2)
+            
+            lp          = self.LEDH_flow_lp(Np, eta0, theta, eta1, x_prev, y[i,:], P_pred, y_pred, R, U)       
+            w_pred      = self.PF.compute_weights(w_prev, lp)
+            w_norm      = self.PF.normalize_weights(w_pred)        
+            ness        = self.PF.compute_ESS(w_norm)
 
-        if ness < NT: 
-            xbar, wbar  = self.PF.multinomial_resample(Np, eta1, w_norm)
-            x_filt      = self.PF.compute_posterior(wbar, xbar)
-            x_prev      = xbar
-            w_prev      = wbar
-        else: 
-            x_filt      = self.PF.compute_posterior(w_norm, eta1)
-            x_prev      = eta1
-            w_prev      = w_norm
-        
-        if method == "UKF":
-            P_filt  = self.LEDH_update_UKF(Np, m_pred, P_pred, y[i,:], y_pred, R, Rcross, U) 
-        if method == "EKF":    
-            P_filt  = self.LEDH_update_EKF(Np,  m_pred, P_pred, y[i,:], y_pred, H, Hiw, W, U)
-        
-        P_prev          = P_filt
-        
-        X_filtered                      = X_filtered.write(i, x_filt) 
-        ESS                             = ESS.write(i, ness) 
-        Weights                         = Weights.write(i, w_norm)    
-        JacobiX                         = JacobiX.write(i, H)  
-        JacobiW                         = JacobiW.write(i, Hiw)
+            if ness < NT: 
+                xbar, wbar  = self.PF.multinomial_resample(Np, eta1, w_norm)
+                x_filt      = self.PF.compute_posterior(wbar, xbar)
+                x_prev      = xbar
+                w_prev      = wbar
+            else: 
+                x_filt      = self.PF.compute_posterior(w_norm, eta1)
+                x_prev      = eta1
+                w_prev      = w_norm
+            
+            if method == "UKF":
+                P_filt  = self.LEDH_update_UKF(Np, m_pred, P_pred, y[i,:], y_pred, R, Rcross, U) 
+            if method == "EKF":    
+                P_filt  = self.LEDH_update_EKF(Np,  m_pred, P_pred, y[i,:], y_pred, H, Hiw, W, U)
+            
+            P_prev          = P_filt
+            
+            X_filtered                      = X_filtered.write(i, x_filt) 
+            ESS                             = ESS.write(i, ness) 
+            Weights                         = Weights.write(i, w_norm)    
+            JacobiX                         = JacobiX.write(i, H)  
+            JacobiW                         = JacobiW.write(i, Hiw)
         
         return X_filtered.stack(), ESS.stack(), Weights.stack(), JacobiX.stack(), JacobiW.stack()
+
 
 
 

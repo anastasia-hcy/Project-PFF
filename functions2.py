@@ -34,7 +34,6 @@ def final_solve(Lambda, mu, HessianLogPrior, HessianLogLikelihood, U):
     return tf.constant(sol.y[0], dtype=tf.float64)
 
 
-
     
 def Dai22eq22(beta, mu, HessianLogPrior, HessianLogLikelihood, Q, U):
     """Compute and return the negative Hessian matrix, Jacobian matrix and stiffness, M, F, and kappa, using equation (22) in Dai et al. (2022)."""
